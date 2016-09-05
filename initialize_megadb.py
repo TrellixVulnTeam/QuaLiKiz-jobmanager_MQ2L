@@ -61,15 +61,14 @@ for scan_values in product(*scan_plan.values()):
       for value in range:
          job_name = str(name) + str(value)
          set_item[name](xpoint_base, value)
-         job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name, job_name), '../../../QuaLiKiz', '../../../tools/qualikiz', stdout='job.stdout', stderr='job.stderr')
+         job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', '../../../tools/qualikiz', stdout='job.stdout', stderr='job.stderr')
          joblist.append(job)
-   batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist)
+   batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, 24)
    batchlist.append(batch)
 
-resp = input('write job to file? [Y/n]')
+resp = input('generate input? [Y/n]')
 if resp == '' or resp == 'Y' or resp == 'y':
-    for job in joblist:
-        job.prepare()
-        job.generate_input()
-    batch.generate_batchscript(24)
-    batch.queue_batch()
+   for batch in batchlist:
+      batch.prepare(overwrite_batch=True)
+      batch.generate_input(dotprint=True)
+    #batch.queue_batch()
