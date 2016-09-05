@@ -22,6 +22,8 @@ rootdir =  os.path.abspath(
                '../..'))
 print (rootdir)
 
+# Define the amount of cores to be used
+ncores = 24
 scan_plan = OrderedDict()
 with open('10D database suggestion.csv') as csvfile:
    reader = csv.reader(csvfile)
@@ -37,7 +39,7 @@ base_plan = QuaLiKizPlan.from_json('./parameters.json')
 base_plan['scan_dict'] = OrderedDict()
 for name in qualikiz_chunck:
    base_plan['scan_dict'][name] = scan_plan.pop(name)
-base_plan['kthetarhos'] = scan_plan.pop('kthetarhos')
+base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
 
 # Now, we can put multiple runs in one batch script
 batch_variable = OrderedDict()
@@ -50,7 +52,8 @@ batchlist = []
 for name in chain(batch_variable, scan_plan):
    set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
 for scan_values in product(*scan_plan.values()):
-   xpoint_base = deepcopy(base_plan['xpoint_base'])
+   base_plan_copy = deepcopy(base_plan)
+   xpoint_base = base_plan_copy['xpoint_base']
    batch_name = ''
    for name, value in zip(scan_plan.keys(), scan_values):
       set_item[name](xpoint_base, value)
@@ -61,14 +64,15 @@ for scan_values in product(*scan_plan.values()):
       for value in range:
          job_name = str(name) + str(value)
          set_item[name](xpoint_base, value)
-         job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', '../../../tools/qualikiz', stdout='job.stdout', stderr='job.stderr')
+         job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', '../../../tools/qualikiz', qualikiz_plan=base_plan_copy, stdout='job.stdout', stderr='job.stderr')
          joblist.append(job)
-   batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, 24)
+   batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores)
    batchlist.append(batch)
 
 resp = input('generate input? [Y/n]')
 if resp == '' or resp == 'Y' or resp == 'y':
-   for batch in batchlist:
+   for i, batch in enumerate(batchlist):
       batch.prepare(overwrite_batch=True)
-      batch.generate_input(dotprint=True)
+      batch.generate_input()
+      print ('batch ' + str(i) + '/' + str(len(batchlist)))
     #batch.queue_batch()
