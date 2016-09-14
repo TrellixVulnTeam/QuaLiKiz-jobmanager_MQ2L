@@ -28,7 +28,7 @@ scan_plan = OrderedDict()
 with open('10D database suggestion.csv') as csvfile:
    reader = csv.reader(csvfile)
    rows = [x for x in reader]
-   for row in rows[3:13]:
+   for row in rows[3:10]:
       print(row)
       scan_plan[row[1]] = [float(x) for x in row[4:] if x != '']
 print (scan_plan)
@@ -74,5 +74,12 @@ if resp == '' or resp == 'Y' or resp == 'y':
    for i, batch in enumerate(batchlist):
       batch.prepare(overwrite_batch=True)
       batch.generate_input()
+      batchsdir = batch.batchsdir
+      name = batch.name
+      dumped_batch = QuaLiKizBatch.from_dir(batchsdir, name)
+      print (dumped_batch == batch)
+      print (batch.batch.__dict__)
+      print (dumped_batch.batch.__dict__)
+      print (batch.batch == dumped_batch.batch)
       print ('batch ' + str(i) + '/' + str(len(batchlist)))
     #batch.queue_batch()
