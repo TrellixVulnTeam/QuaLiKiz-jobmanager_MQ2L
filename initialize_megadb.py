@@ -126,31 +126,31 @@ def chunks(l, n):
 n = int(np.ceil(len(batchlist) / 24))
 scan_chunks = chunks(batchlist, n)
 scan_chunks = [x for x in scan_chunks]
-print (scan_chunks)
+#print (scan_chunks)
 
 #resp = input('generate input? [Y/n]')
-from mpi4py import MPI
-comm = MPI.COMM_WORLD
-size = comm.Get_size()
-rank = comm.Get_rank()
-print (size)
-print (rank)
-if rank == 0:
-    data = [(i+1)**2 for i in range(size)]
-else:
-    data = None
-data = comm.scatter(data, root=0)
-assert data == (rank+1)**2
+from multiprocessing import Process, Manager
+import multiprocessing as mp
+import pickle
 
-resp = 'n'
-if resp == '' or resp == 'Y' or resp == 'y':
-   for i, batch in enumerate(batchlist):
-      batch.prepare(overwrite_batch=True)
-      batch.generate_input()
-      #batchsdir = batch.batchsdir
-      #name = batch.name
-      #batchdir = os.path.join(batchsdir, name)
-      #dumped_batch = QuaLiKizBatch.from_dir(batchdir)
-      #print (dumped_batch == batch)
-      print ('batch ' + str(i+1) + '/' + str(len(batchlist)))
-    #batch.queue_batch()
+
+def generate_input(batch):
+    batch.prepare(overwrite_batch=True)
+    batch.generate_input()
+
+pool = mp.Pool(processes=4)
+#print (pickledlist)
+pool.map(generate_input, batchlist)
+
+#resp = 'n'
+#if resp == '' or resp == 'Y' or resp == 'y':
+#   for i, batch in enumerate(batchlist):
+#      batch.prepare(overwrite_batch=True)
+#      batch.generate_input()
+#      #batchsdir = batch.batchsdir
+#      #name = batch.name
+#      #batchdir = os.path.join(batchsdir, name)
+#      #dumped_batch = QuaLiKizBatch.from_dir(batchdir)
+#      #print (dumped_batch == batch)
+#      print ('batch ' + str(i+1) + '/' + str(len(batchlist)))
+#    #batch.queue_batch()
