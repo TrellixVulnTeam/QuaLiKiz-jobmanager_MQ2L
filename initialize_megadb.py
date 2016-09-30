@@ -11,6 +11,7 @@ import csv
 from collections import OrderedDict
 from copy import deepcopy
 from itertools import product, chain
+import numpy as np
 
 # Define some standard paths
 runsdir = 'runs'
@@ -24,7 +25,8 @@ rootdir =  os.path.abspath(
 print (rootdir)
 
 # And initialize the megadb job database
-os.remove('jobdb.sqlite3')
+if os.path.isfile('jobdb.sqlite3'):
+    os.remove('jobdb.sqlite3')
 db = sqlite3.connect('jobdb.sqlite3')
 db.execute('''CREATE TABLE queue (
                 Id             INTEGER PRIMARY KEY
@@ -45,8 +47,10 @@ ncores = 24
 scan_plan = OrderedDict()
 with open('10D database suggestion.csv') as csvfile:
     reader = csv.reader(csvfile)
-    rows = [x for x in reader]
-    for row in rows[3:10]:
+    [next(reader) for x in range(3)]
+    for row in reader:
+        if row[0] == '':
+           break
         print(row)
         scan_plan[row[1]] = [float(x) for x in row[4:] if x != '']
     print ('complete plan:' + str(scan_plan))
@@ -54,7 +58,12 @@ with open('10D database suggestion.csv') as csvfile:
 # Define the smallest 'chunck' of our run; the QuaLiKiz run
 qualikiz_chunck = ['Ati', 'Ate', 'Ane', 'qx']
 base_plan = QuaLiKizPlan.from_json('./parameters.json')
+base_plan['scan_type'] = 'hyperrect'
 base_plan['scan_dict'] = OrderedDict()
+base_plan['xpoint_base']['meta']['seperate_flux'] = True
+base_plan['xpoint_base']['norm']['Ani1'] = False
+base_plan['xpoint_base']['norm']['ninorm1'] = False
+base_plan['xpoint_base']['norm']['QN_grad'] = False
 for name in qualikiz_chunck:
     base_plan['scan_dict'][name] = scan_plan.pop(name)
 base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
@@ -70,7 +79,7 @@ for name in batch_chunck:
     
 
 # We can now make a hypercube over all remaining parameters
-print ('hypercube over:' + str(*scan_plan.items()))
+#print ('hypercube over:' + str(*scan_plan.items()))
 batchlist = []
 for name in scan_plan:
     set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
@@ -82,6 +91,7 @@ insert_batch_string = '''INSERT INTO batch VALUES (?, ?, ?, ? ''' + str(', ?'*(l
                                                       
 queue_id = 0
 batch_id = 0
+
 for scan_values in product(*scan_plan.values()):
     base_plan_copy = deepcopy(base_plan)
     xpoint_base = base_plan_copy['xpoint_base']
@@ -94,28 +104,53 @@ for scan_values in product(*scan_plan.values()):
     joblist = []
     db.execute(insert_batch_string, (batch_id, queue_id, 0, 'initialized') + scan_values)
     
-    for name, range in batch_variable.items():
-        for value in range:
+    for name, values in batch_variable.items():
+        for value in values:
             db.execute(insert_job_string, (batch_id, 'initialized', value))
             job_name = str(name) + str(value)
             set_item[name](xpoint_base, value)
             job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', '../../../tools/qualikiz', qualikiz_plan=base_plan_copy, stdout='job.stdout', stderr='job.stderr')
-
+ 
             joblist.append(job)
     batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores)
     batchlist.append(batch)
     batch_id += 1
-
 db.commit()
-resp = input('generate input? [Y/n]')
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    print (l.__class__)
+    print (n.__class__)
+    print (len(l).__class__)
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+n = int(np.ceil(len(batchlist) / 24))
+scan_chunks = chunks(batchlist, n)
+scan_chunks = [x for x in scan_chunks]
+print (scan_chunks)
+
+#resp = input('generate input? [Y/n]')
+from mpi4py import MPI
+comm = MPI.COMM_WORLD
+size = comm.Get_size()
+rank = comm.Get_rank()
+print (size)
+print (rank)
+if rank == 0:
+    data = [(i+1)**2 for i in range(size)]
+else:
+    data = None
+data = comm.scatter(data, root=0)
+assert data == (rank+1)**2
+
+resp = 'n'
 if resp == '' or resp == 'Y' or resp == 'y':
    for i, batch in enumerate(batchlist):
       batch.prepare(overwrite_batch=True)
       batch.generate_input()
-      batchsdir = batch.batchsdir
-      name = batch.name
-      batchdir = os.path.join(batchsdir, name)
-      dumped_batch = QuaLiKizBatch.from_dir(batchdir)
-      print (dumped_batch == batch)
-      print ('batch ' + str(i) + '/' + str(len(batchlist)))
+      #batchsdir = batch.batchsdir
+      #name = batch.name
+      #batchdir = os.path.join(batchsdir, name)
+      #dumped_batch = QuaLiKizBatch.from_dir(batchdir)
+      #print (dumped_batch == batch)
+      print ('batch ' + str(i+1) + '/' + str(len(batchlist)))
     #batch.queue_batch()
