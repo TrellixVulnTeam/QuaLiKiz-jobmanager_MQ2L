@@ -4,7 +4,7 @@ import sys
 import inspect
 from qualikiz.qualikizrun import QuaLiKizBatch, QuaLiKizRun
 from qualikiz.inputfiles import QuaLiKizPlan
-from qualikiz.edisonbatch import Srun, Batch
+from qualikiz.edisonbatch import Srun, Sbatch
 import sqlite3
 """ Creates a mini-job based on the reference example """
 import csv
@@ -71,10 +71,10 @@ base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
 # Now, we can put multiple runs in one batch script
 batch_chunck = ['smag']
 batch_variable = OrderedDict()
-set_item = {}
+#set_item = {}
 for name in batch_chunck:
     batch_variable[name] = scan_plan.pop(name)
-    set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
+    #set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
     db.execute('''ALTER TABLE job ADD COLUMN ''' + name + ''' REAL''')
     
 
@@ -82,7 +82,7 @@ for name in batch_chunck:
 #print ('hypercube over:' + str(*scan_plan.items()))
 batchlist = []
 for name in scan_plan:
-    set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
+    #set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
     db.execute('''ALTER TABLE batch ADD COLUMN ''' + name + ''' REAL''')
 
 # Initialize some database stuff
@@ -98,7 +98,7 @@ for scan_values in product(*scan_plan.values()):
     batch_name = ''
     value_list = []
     for name, value in zip(scan_plan.keys(), scan_values):
-        set_item[name](xpoint_base, value)
+        xpoint_base[name] = value
         batch_name += str(name) + str(value)
     # Now we have our 'base'. Each base has one batch with 10 runs inside
     joblist = []
@@ -108,9 +108,8 @@ for scan_values in product(*scan_plan.values()):
         for value in values:
             db.execute(insert_job_string, (batch_id, 'initialized', value))
             job_name = str(name) + str(value)
-            set_item[name](xpoint_base, value)
-            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', '../../../tools/qualikiz', qualikiz_plan=base_plan_copy, stdout='job.stdout', stderr='job.stderr')
- 
+            xpoint_base[name] = value
+            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_copy, stdout='job.stdout', stderr='job.stderr')
             joblist.append(job)
     batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores)
     batchlist.append(batch)
@@ -138,9 +137,11 @@ def generate_input(batch):
     batch.prepare(overwrite_batch=True)
     batch.generate_input()
 
-pool = mp.Pool(processes=4)
+#pool = mp.Pool(processes=4)
 #print (pickledlist)
-pool.map(generate_input, batchlist)
+#pool.map(generate_input, batchlist)
+for batch in batchlist:
+   generate_input(batch)
 
 #resp = 'n'
 #if resp == '' or resp == 'Y' or resp == 'y':
