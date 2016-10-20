@@ -2,9 +2,9 @@ import os
 import datetime
 import sys
 import inspect
-from qualikiz.qualikizrun import QuaLiKizBatch, QuaLiKizRun
-from qualikiz.inputfiles import QuaLiKizPlan
-from qualikiz.edisonbatch import Srun, Sbatch
+from qualikiz_tools.qualikiz_io.qualikizrun import QuaLiKizBatch, QuaLiKizRun
+from qualikiz_tools.qualikiz_io.inputfiles import QuaLiKizPlan
+from qualikiz_tools.machine_specific.slurm import Srun, Sbatch
 import sqlite3
 """ Creates a mini-job based on the reference example """
 import csv
@@ -61,12 +61,25 @@ base_plan = QuaLiKizPlan.from_json('./parameters.json')
 base_plan['scan_type'] = 'hyperrect'
 base_plan['scan_dict'] = OrderedDict()
 base_plan['xpoint_base']['meta']['seperate_flux'] = True
-base_plan['xpoint_base']['norm']['Ani1'] = False
-base_plan['xpoint_base']['norm']['ninorm1'] = False
-base_plan['xpoint_base']['norm']['QN_grad'] = False
+base_plan['xpoint_base']['norm']['Ani1'] = True
+base_plan['xpoint_base']['norm']['ninorm1'] = True
+base_plan['xpoint_base']['norm']['QN_grad'] = True
+base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
+
+
 for name in qualikiz_chunck:
     base_plan['scan_dict'][name] = scan_plan.pop(name)
-base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
+
+scan_vip = {}
+scan_vip['x'] = 0.15
+scan_vip['Ti_Te_rel'] = 1
+scan_vip['Zeff'] = 1
+scan_vip['Nustar'] = 1e-3
+scan_vip['smag'] = 1
+for key, item in scan_plan.items():
+   scan_plan[key] = [sorted(item, key=lambda x: (x - scan_vip[key])**2)[0]]
+   print (scan_plan[key])
+
 
 # Now, we can put multiple runs in one batch script
 batch_chunck = ['smag']
