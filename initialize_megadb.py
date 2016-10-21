@@ -43,7 +43,7 @@ db.execute('''CREATE TABLE job (
             )''')
 
 # Define the amount of cores to be used
-ncores = 24
+ncores = 1152
 scan_plan = OrderedDict()
 with open('10D database suggestion.csv') as csvfile:
     reader = csv.reader(csvfile)
@@ -122,9 +122,9 @@ for scan_values in product(*scan_plan.values()):
             db.execute(insert_job_string, (batch_id, 'initialized', value))
             job_name = str(name) + str(value)
             xpoint_base[name] = value
-            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_copy, stdout='job.stdout', stderr='job.stderr')
+            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz+pat', qualikiz_plan=base_plan_copy)
             joblist.append(job)
-    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores)
+    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='debug')
     batchlist.append(batch)
     batch_id += 1
 db.commit()

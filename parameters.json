@@ -4,7 +4,7 @@
     "scan_type": "hyperedge",
     "xpoint_base": {
         "meta": {
-            "phys_meth": 2,
+            "phys_meth": 1,
             "coll_flag": true,
             "rot_flag": false,
             "verbose": true,
