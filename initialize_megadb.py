@@ -65,6 +65,8 @@ base_plan['xpoint_base']['norm']['Ani1'] = False
 base_plan['xpoint_base']['norm']['ninorm1'] = True
 base_plan['xpoint_base']['norm']['An_equal'] = True
 base_plan['xpoint_base']['norm']['QN_grad'] = True
+base_plan['xpoint_base']['norm']['recalc_Nustar'] = True
+base_plan['xpoint_base']['norm']['recalc_Ti_Te_rel'] = True
 base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
 
 
