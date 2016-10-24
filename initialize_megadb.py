@@ -61,8 +61,9 @@ base_plan = QuaLiKizPlan.from_json('./parameters.json')
 base_plan['scan_type'] = 'hyperrect'
 base_plan['scan_dict'] = OrderedDict()
 base_plan['xpoint_base']['meta']['seperate_flux'] = True
-base_plan['xpoint_base']['norm']['Ani1'] = True
+base_plan['xpoint_base']['norm']['Ani1'] = False
 base_plan['xpoint_base']['norm']['ninorm1'] = True
+base_plan['xpoint_base']['norm']['An_equal'] = True
 base_plan['xpoint_base']['norm']['QN_grad'] = True
 base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
 
@@ -110,9 +111,19 @@ for scan_values in product(*scan_plan.values()):
     xpoint_base = base_plan_copy['xpoint_base']
     batch_name = ''
     value_list = []
+
     for name, value in zip(scan_plan.keys(), scan_values):
-        xpoint_base[name] = value
-        batch_name += str(name) + str(value)
+        if name != 'Ti_Te_rel':
+            xpoint_base[name] = value
+            batch_name += str(name) + str(value)
+    name = 'Ti_Te_rel'
+    index = list(scan_plan.keys()).index(name)
+    value = scan_values[index]
+    xpoint_base[name] = value
+    batch_name += str(name) + str(value)
+    for name, value in zip(scan_plan.keys(), scan_values):
+        if  xpoint_base[name] != value:
+            raise Exception('Setting of ' + name + ' failed!')
     # Now we have our 'base'. Each base has one batch with 10 runs inside
     joblist = []
     db.execute(insert_batch_string, (batch_id, queue_id, 0, 'initialized') + scan_values)
