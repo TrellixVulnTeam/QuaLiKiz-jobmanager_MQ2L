@@ -111,8 +111,9 @@ insert_batch_string = '''INSERT INTO batch VALUES (?, ?, ?, ? ''' + str(', ?'*(l
                                                       
 queue_id = 0
 batch_id = 0
-
-for scan_values in product(*scan_plan.values()):
+tot = np.product([len(x) for x in scan_plan.values()])
+for i, scan_values in enumerate(product(*scan_plan.values())):
+    print (str(i) + '/' + str(tot))
     base_plan_copy = deepcopy(base_plan)
     xpoint_base = base_plan_copy['xpoint_base']
     batch_name = ''
@@ -139,16 +140,17 @@ for scan_values in product(*scan_plan.values()):
                             'Should be ' + str(value) + ' but is ' + str(xpoint_base[name]))
     # Now we have our 'base'. Each base has one batch with 10 runs inside
     joblist = []
-    db.execute(insert_batch_string, (batch_id, queue_id, 0, 'initialized') + scan_values)
     
     for name, values in batch_variable.items():
         for value in values:
-            db.execute(insert_job_string, (batch_id, 'initialized', value))
+            db.execute(insert_job_string, (batch_id, 'prepared', value))
             job_name = str(name) + str(value)
             xpoint_base[name] = value
             job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz+pat', qualikiz_plan=base_plan_copy)
             joblist.append(job)
     batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='regular')
+    batch.prepare(overwrite_batch=True)
+    db.execute(insert_batch_string, (batch_id, queue_id, 0, 'prepared') + scan_values)
     batchlist.append(batch)
     batch_id += 1
 db.commit()
@@ -170,8 +172,6 @@ import multiprocessing as mp
 import pickle
 
 
-def prepare(batch):
-    batch.prepare(overwrite_batch=True)
 
 def generate_input(batch):
     batch.generate_input()
@@ -179,9 +179,6 @@ def generate_input(batch):
 #pool = mp.Pool(processes=4)
 #print (pickledlist)
 #pool.map(generate_input, batchlist)
-for i, batch in enumerate(batchlist):
-   print (str(i) + '/' + str(len(batchlist)))
-   prepare(batch)
 
 #for batch in batchlist:
 #   generate_input(batch)
