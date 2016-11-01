@@ -2,9 +2,9 @@ import os
 import datetime
 import sys
 import inspect
-from qualikiz.qualikizrun import QuaLiKizBatch, QuaLiKizRun
-from qualikiz.inputfiles import QuaLiKizPlan
-from qualikiz.edisonbatch import Srun, Sbatch
+from qualikiz_tools.qualikiz_io.qualikizrun import QuaLiKizBatch, QuaLiKizRun
+from qualikiz_tools.qualikiz_io.inputfiles import QuaLiKizPlan
+from qualikiz_tools.machine_specific.slurm import Srun, Sbatch
 import sqlite3
 """ Creates a mini-job based on the reference example """
 import csv
@@ -43,7 +43,7 @@ db.execute('''CREATE TABLE job (
             )''')
 
 # Define the amount of cores to be used
-ncores = 24
+ncores = 1152
 scan_plan = OrderedDict()
 with open('10D database suggestion.csv') as csvfile:
     reader = csv.reader(csvfile)
@@ -62,11 +62,27 @@ base_plan['scan_type'] = 'hyperrect'
 base_plan['scan_dict'] = OrderedDict()
 base_plan['xpoint_base']['meta']['seperate_flux'] = True
 base_plan['xpoint_base']['norm']['Ani1'] = False
-base_plan['xpoint_base']['norm']['ninorm1'] = False
-base_plan['xpoint_base']['norm']['QN_grad'] = False
+base_plan['xpoint_base']['norm']['ninorm1'] = True
+base_plan['xpoint_base']['norm']['An_equal'] = True
+base_plan['xpoint_base']['norm']['QN_grad'] = True
+base_plan['xpoint_base']['norm']['recalc_Nustar'] = True
+base_plan['xpoint_base']['norm']['recalc_Ti_Te_rel'] = True
+base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
+
+
 for name in qualikiz_chunck:
     base_plan['scan_dict'][name] = scan_plan.pop(name)
-base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
+
+scan_vip = {}
+scan_vip['x'] = 0.15
+scan_vip['Ti_Te_rel'] = 1
+scan_vip['Zeff'] = 1
+scan_vip['Nustar'] = 1e-3
+scan_vip['smag'] = 1
+for key, item in scan_plan.items():
+   scan_plan[key] = [sorted(item, key=lambda x: (x - scan_vip[key])**2)[0]]
+   print (scan_plan[key])
+
 
 # Now, we can put multiple runs in one batch script
 batch_chunck = ['smag']
@@ -97,9 +113,19 @@ for scan_values in product(*scan_plan.values()):
     xpoint_base = base_plan_copy['xpoint_base']
     batch_name = ''
     value_list = []
+
     for name, value in zip(scan_plan.keys(), scan_values):
-        xpoint_base[name] = value
-        batch_name += str(name) + str(value)
+        if name != 'Ti_Te_rel':
+            xpoint_base[name] = value
+            batch_name += str(name) + str(value)
+    name = 'Ti_Te_rel'
+    index = list(scan_plan.keys()).index(name)
+    value = scan_values[index]
+    xpoint_base[name] = value
+    batch_name += str(name) + str(value)
+    for name, value in zip(scan_plan.keys(), scan_values):
+        if  xpoint_base[name] != value:
+            raise Exception('Setting of ' + name + ' failed!')
     # Now we have our 'base'. Each base has one batch with 10 runs inside
     joblist = []
     db.execute(insert_batch_string, (batch_id, queue_id, 0, 'initialized') + scan_values)
@@ -109,9 +135,9 @@ for scan_values in product(*scan_plan.values()):
             db.execute(insert_job_string, (batch_id, 'initialized', value))
             job_name = str(name) + str(value)
             xpoint_base[name] = value
-            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_copy, stdout='job.stdout', stderr='job.stderr')
+            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz+pat', qualikiz_plan=base_plan_copy)
             joblist.append(job)
-    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores)
+    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='debug')
     batchlist.append(batch)
     batch_id += 1
 db.commit()
