@@ -9,7 +9,7 @@
             "rot_flag": false,
             "verbose": true,
             "separateflux": true,
-            "numsols": 3,
+            "numsols": 2,
             "relacc1": 0.001,
             "relacc2": 0.02,
             "maxruns": 1,
