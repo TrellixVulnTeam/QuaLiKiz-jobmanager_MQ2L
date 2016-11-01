@@ -74,14 +74,18 @@ for name in qualikiz_chunck:
     base_plan['scan_dict'][name] = scan_plan.pop(name)
 
 scan_vip = {}
-scan_vip['x'] = 0.15
+scan_vip['epsilon'] = 0.15
 scan_vip['Ti_Te_rel'] = 1
 scan_vip['Zeff'] = 1
 scan_vip['Nustar'] = 1e-3
 scan_vip['smag'] = 1
 for key, item in scan_plan.items():
-   scan_plan[key] = [sorted(item, key=lambda x: (x - scan_vip[key])**2)[0]]
+   scan_plan[key] = sorted(item, key=lambda x: (x - scan_vip[key])**2)
    print (scan_plan[key])
+
+for key, item in scan_plan.items():
+   if key == 'banana':
+      scan_plan[key] = [scan_plan[key][0]]
 
 
 # Now, we can put multiple runs in one batch script
@@ -114,18 +118,25 @@ for scan_values in product(*scan_plan.values()):
     batch_name = ''
     value_list = []
 
-    for name, value in zip(scan_plan.keys(), scan_values):
-        if name != 'Ti_Te_rel':
-            xpoint_base[name] = value
-            batch_name += str(name) + str(value)
-    name = 'Ti_Te_rel'
-    index = list(scan_plan.keys()).index(name)
-    value = scan_values[index]
-    xpoint_base[name] = value
-    batch_name += str(name) + str(value)
-    for name, value in zip(scan_plan.keys(), scan_values):
-        if  xpoint_base[name] != value:
-            raise Exception('Setting of ' + name + ' failed!')
+
+    scan_point = OrderedDict(zip(scan_plan.keys(), scan_values))
+    # Reorder elements in point list to avoid dependencies
+    if (any([item in scan_point for item in ['epsilon', 'x', 'rho']]) and
+        'Nustar' in scan_point):
+       scan_point.move_to_end('Nustar')
+    if all([item in scan_point for item in ['Nustar', 'Ti_Te_rel']]):
+       scan_point.move_to_end('Ti_Te_rel')
+
+    # Set xpoint_base to scan_point
+    for name, value in scan_point.items():
+        xpoint_base[name] = value
+        batch_name += str(name) + str(value)
+
+    # Sanity check: did setting work?
+    for name, value in scan_point.items():
+        if not np.isclose(xpoint_base[name], value, rtol=1e-4):
+            raise Exception('Setting of ' + name + ' failed!' +
+                            'Should be ' + str(value) + ' but is ' + str(xpoint_base[name]))
     # Now we have our 'base'. Each base has one batch with 10 runs inside
     joblist = []
     db.execute(insert_batch_string, (batch_id, queue_id, 0, 'initialized') + scan_values)
@@ -137,7 +148,7 @@ for scan_values in product(*scan_plan.values()):
             xpoint_base[name] = value
             job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz+pat', qualikiz_plan=base_plan_copy)
             joblist.append(job)
-    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='debug')
+    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='regular')
     batchlist.append(batch)
     batch_id += 1
 db.commit()
@@ -159,15 +170,21 @@ import multiprocessing as mp
 import pickle
 
 
-def generate_input(batch):
+def prepare(batch):
     batch.prepare(overwrite_batch=True)
+
+def generate_input(batch):
     batch.generate_input()
 
 #pool = mp.Pool(processes=4)
 #print (pickledlist)
 #pool.map(generate_input, batchlist)
-for batch in batchlist:
-   generate_input(batch)
+for i, batch in enumerate(batchlist):
+   print (str(i) + '/' + str(len(batchlist)))
+   prepare(batch)
+
+#for batch in batchlist:
+#   generate_input(batch)
 
 #resp = 'n'
 #if resp == '' or resp == 'Y' or resp == 'y':
