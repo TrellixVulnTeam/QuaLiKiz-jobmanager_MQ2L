@@ -35,6 +35,7 @@ db.execute('''CREATE TABLE batch (
                 Id             INTEGER PRIMARY KEY,
                 Queue_id       INTEGER,
                 Jobnumber      INTEGER,
+                Path           TEXT,
                 State          TEXT
             )''')
 db.execute('''CREATE TABLE job (
@@ -107,7 +108,7 @@ for name in scan_plan:
 
 # Initialize some database stuff
 insert_job_string = '''INSERT INTO job VALUES (?, ? ''' + str(', ?'*(len(batch_chunck))) + ''')'''
-insert_batch_string = '''INSERT INTO batch VALUES (?, ?, ?, ? ''' + str(', ?'*(len(scan_plan))) + ''')'''
+insert_batch_string = '''INSERT INTO batch VALUES (?, ?, ?, ?, ? ''' + str(', ?'*(len(scan_plan))) + ''')'''
                                                       
 queue_id = 0
 batch_id = 0
@@ -150,7 +151,7 @@ for i, scan_values in enumerate(product(*scan_plan.values())):
             joblist.append(job)
     batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='regular')
     batch.prepare(overwrite_batch=True)
-    db.execute(insert_batch_string, (batch_id, queue_id, 0, 'prepared') + scan_values)
+    db.execute(insert_batch_string, (batch_id, queue_id, 0, os.path.join(batch.batchsdir, batch.name), 'prepared') + scan_values)
     batchlist.append(batch)
     batch_id += 1
 db.commit()
