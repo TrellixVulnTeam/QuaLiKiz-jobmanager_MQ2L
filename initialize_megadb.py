@@ -40,6 +40,7 @@ db.execute('''CREATE TABLE batch (
             )''')
 db.execute('''CREATE TABLE job (
                 Batch_id       INTEGER,
+                Job_id         INTEGER,
                 State          TEXT
             )''')
 
@@ -61,13 +62,6 @@ qualikiz_chunck = ['Ati', 'Ate', 'Ane', 'qx']
 base_plan = QuaLiKizPlan.from_json('./parameters.json')
 base_plan['scan_type'] = 'hyperrect'
 base_plan['scan_dict'] = OrderedDict()
-base_plan['xpoint_base']['meta']['seperate_flux'] = True
-base_plan['xpoint_base']['norm']['Ani1'] = False
-base_plan['xpoint_base']['norm']['ninorm1'] = True
-base_plan['xpoint_base']['norm']['An_equal'] = True
-base_plan['xpoint_base']['norm']['QN_grad'] = True
-base_plan['xpoint_base']['norm']['recalc_Nustar'] = True
-base_plan['xpoint_base']['norm']['recalc_Ti_Te_rel'] = True
 base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
 
 
@@ -85,7 +79,7 @@ for key, item in scan_plan.items():
    print (scan_plan[key])
 
 for key, item in scan_plan.items():
-   if key == 'banana':
+   if key in  ['Ti_Te_rel', 'Zeff', 'Nustar', 'epsilon'] :
       scan_plan[key] = [scan_plan[key][0]]
 
 
@@ -107,7 +101,7 @@ for name in scan_plan:
     db.execute('''ALTER TABLE batch ADD COLUMN ''' + name + ''' REAL''')
 
 # Initialize some database stuff
-insert_job_string = '''INSERT INTO job VALUES (?, ? ''' + str(', ?'*(len(batch_chunck))) + ''')'''
+insert_job_string = '''INSERT INTO job VALUES (?, ?, ? ''' + str(', ?'*(len(batch_chunck))) + ''')'''
 insert_batch_string = '''INSERT INTO batch VALUES (?, ?, ?, ?, ? ''' + str(', ?'*(len(scan_plan))) + ''')'''
                                                       
 queue_id = 0
@@ -143,13 +137,13 @@ for i, scan_values in enumerate(product(*scan_plan.values())):
     joblist = []
     
     for name, values in batch_variable.items():
-        for value in values:
-            db.execute(insert_job_string, (batch_id, 'prepared', value))
+        for i, value in enumerate(values):
+            db.execute(insert_job_string, (batch_id, i, 'prepared', value))
             job_name = str(name) + str(value)
             xpoint_base[name] = value
-            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz+pat', qualikiz_plan=base_plan_copy)
+            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_copy)
             joblist.append(job)
-    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='regular')
+    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='debug')
     batch.prepare(overwrite_batch=True)
     db.execute(insert_batch_string, (batch_id, queue_id, 0, os.path.join(batch.batchsdir, batch.name), 'prepared') + scan_values)
     batchlist.append(batch)

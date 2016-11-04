@@ -70,9 +70,12 @@
             }
         ],
         "norm": {
-            "Ani1": true,
-            "ninorm1": true,
-            "QN_grad": true
+            "Ani1": false,
+            "ninorm1": false,
+            "QN_grad": true,
+            "recalc_Nustar": true,
+            "recalc_Ti_Te_rel": true,
+            "An_equal": true
         }
     }
 }
