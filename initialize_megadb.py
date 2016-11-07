@@ -12,6 +12,7 @@ from collections import OrderedDict
 from copy import deepcopy
 from itertools import product, chain
 import numpy as np
+from IPython import embed
 
 # Define some standard paths
 runsdir = 'runs'
@@ -62,7 +63,8 @@ qualikiz_chunck = ['Ati', 'Ate', 'Ane', 'qx']
 base_plan = QuaLiKizPlan.from_json('./parameters.json')
 base_plan['scan_type'] = 'hyperrect'
 base_plan['scan_dict'] = OrderedDict()
-base_plan['xpoint_base']['special']['kthetarhos'] = scan_plan.pop('kthetarhos')
+kthetarhos = scan_plan.pop('kthetarhos')
+base_plan['xpoint_base']['special']['kthetarhos'] = kthetarhos
 
 
 for name in qualikiz_chunck:
@@ -109,8 +111,8 @@ batch_id = 0
 tot = np.product([len(x) for x in scan_plan.values()])
 for i, scan_values in enumerate(product(*scan_plan.values())):
     print (str(i) + '/' + str(tot))
-    base_plan_copy = deepcopy(base_plan)
-    xpoint_base = base_plan_copy['xpoint_base']
+    base_plan_parent_copy = deepcopy(base_plan)
+    xpoint_base = base_plan_parent_copy['xpoint_base']
     batch_name = ''
     value_list = []
 
@@ -138,10 +140,12 @@ for i, scan_values in enumerate(product(*scan_plan.values())):
     
     for name, values in batch_variable.items():
         for i, value in enumerate(values):
+            base_plan_batch_copy = deepcopy(base_plan_parent_copy)
+            xpoint_base = base_plan_batch_copy['xpoint_base']
             db.execute(insert_job_string, (batch_id, i, 'prepared', value))
             job_name = str(name) + str(value)
             xpoint_base[name] = value
-            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_copy)
+            job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_batch_copy)
             joblist.append(job)
     batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='debug')
     batch.prepare(overwrite_batch=True)
