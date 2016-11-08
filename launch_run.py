@@ -4,9 +4,13 @@ from qualikiz_tools.qualikiz_io.qualikizrun import QuaLiKizBatch, QuaLiKizRun
 import subprocess as sp
 
 queuelimit = 1
-def prepare_input(db, amount):
-    query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' LIMIT ?''', (str(amount),))
+def prepare_input(db, amount, mode='ordered'):
+    if mode == 'ordered':
+        query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' LIMIT ?''', (str(amount),))
+    elif mode == 'random':
+        query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' ORDER BY RANDOM() LIMIT ?''', (str(amount),))
     for el in query:
+        print (el)
         batchid = el[0]
         dir = el[1]
         #QuaLiKizBatch.generate_input
@@ -29,6 +33,7 @@ def prepare_input(db, amount):
 def queue(db, amount):
     query = db.execute('''SELECT Id, Path FROM batch WHERE State='inputed' LIMIT ?''', (str(amount),))
     for el in query:
+        print(el)
         batchid = el[0]
         dir = el[1]
         with warnings.catch_warnings():
@@ -38,6 +43,9 @@ def queue(db, amount):
         if jobnumber:
             db.execute('''UPDATE Batch SET State='queued', Jobnumber=? WHERE Id=?''',
                        (jobnumber, batchid))
+            db.execute('''UPDATE Job SET State='queued' WHERE BatchId=?''',
+                       (batchid,))
+
             db.commit()
 
 def waiting_jobs():
@@ -53,10 +61,13 @@ def finished_check(db):
         batchid = el[0]
         dir = el[1]
         jobnumber = el[2]
-        batch = QuaLiKizBatch.from_dir(dir)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            batch = QuaLiKizBatch.from_dir(dir)
         output = sp.check_output(['sacct', '--brief', '--noheader', '--parsable2', '--job', str(jobnumber)])
         jobline = output.splitlines()[0]
         __, state, __ = jobline.split(b'|')
+        print(state)
         if state == b'COMPLETED':
             batch_success = True
             for i, run in enumerate(batch.runlist):
@@ -75,6 +86,19 @@ def finished_check(db):
             db.execute('''UPDATE Batch SET State=? WHERE Id=?''',
                            (state, batchid))
             db.commit()
+        elif state.startswith(b'CANCELLED'):
+            for i, run in enumerate(batch.runlist):
+                if run.is_done():
+                    state = 'success'
+                else:
+                    state = 'failed(cancelled)'
+                db.execute('''UPDATE Job SET State=? WHERE Batch_id=? AND Job_id=?''',
+                           (state, batchid, i))
+                db.commit()
+            db.execute('''UPDATE Batch SET State='cancelled' WHERE Id=?''',
+                           (batchid,))
+            db.commit()
+
 
         else:
             batch_notdone += 1
@@ -107,8 +131,8 @@ def archive(db):
 db = sqlite3.connect('jobdb.sqlite3')
 in_queue = waiting_jobs()
 print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-#prepare_input(db, 1)
-#queue(db, 1)
-#finished_check(db)
-archive(db)
+#prepare_input(db, 1, mode='random')
+#queue(db, 2)
+finished_check(db)
+#archive(db)
 db.close()
