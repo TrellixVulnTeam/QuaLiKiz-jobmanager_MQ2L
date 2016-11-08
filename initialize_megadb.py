@@ -80,9 +80,9 @@ for key, item in scan_plan.items():
    scan_plan[key] = sorted(item, key=lambda x: (x - scan_vip[key])**2)
    print (scan_plan[key])
 
-for key, item in scan_plan.items():
-   if key in  ['Ti_Te_rel', 'Zeff', 'Nustar', 'epsilon'] :
-      scan_plan[key] = [scan_plan[key][0]]
+#for key, item in scan_plan.items():
+#   if key in  ['Ti_Te_rel', 'Zeff', 'Nustar', 'epsilon'] :
+#      scan_plan[key] = [scan_plan[key][0]]
 
 
 # Now, we can put multiple runs in one batch script
@@ -96,7 +96,10 @@ for name in batch_chunck:
     
 
 # We can now make a hypercube over all remaining parameters
+# Lets reverse the list so the priority is correct
+scan_plan = OrderedDict(reversed(list(scan_plan.items())))
 #print ('hypercube over:' + str(*scan_plan.items()))
+
 batchlist = []
 for name in scan_plan:
     #set_item[name] = base_plan['xpoint_base'].howto_setitem(name)
@@ -147,7 +150,7 @@ for i, scan_values in enumerate(product(*scan_plan.values())):
             xpoint_base[name] = value
             job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name), job_name, '../../../QuaLiKiz', qualikiz_plan=base_plan_batch_copy)
             joblist.append(job)
-    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='debug')
+    batch = QuaLiKizBatch(os.path.join(rootdir, runsdir), batch_name, joblist, ncores, partition='regular')
     batch.prepare(overwrite_batch=True)
     db.execute(insert_batch_string, (batch_id, queue_id, 0, os.path.join(batch.batchsdir, batch.name), 'prepared') + scan_values)
     batchlist.append(batch)
