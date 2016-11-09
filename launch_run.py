@@ -4,11 +4,13 @@ from qualikiz_tools.qualikiz_io.qualikizrun import QuaLiKizBatch, QuaLiKizRun
 import subprocess as sp
 
 queuelimit = 1
-def prepare_input(db, amount, mode='ordered'):
+def prepare_input(db, amount, mode='ordered', batchid=None):
     if mode == 'ordered':
         query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' LIMIT ?''', (str(amount),))
     elif mode == 'random':
         query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' ORDER BY RANDOM() LIMIT ?''', (str(amount),))
+    elif mode == 'specific':
+        query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' AND Id=? LIMIT ?''', (batchid, str(amount)))
     for el in query:
         print (el)
         batchid = el[0]
@@ -43,7 +45,7 @@ def queue(db, amount):
         if jobnumber:
             db.execute('''UPDATE Batch SET State='queued', Jobnumber=? WHERE Id=?''',
                        (jobnumber, batchid))
-            db.execute('''UPDATE Job SET State='queued' WHERE BatchId=?''',
+            db.execute('''UPDATE Job SET State='queued' WHERE Batch_Id=?''',
                        (batchid,))
 
             db.commit()
@@ -86,14 +88,14 @@ def finished_check(db):
             db.execute('''UPDATE Batch SET State=? WHERE Id=?''',
                            (state, batchid))
             db.commit()
-        elif state.startswith(b'CANCELLED'):
+        elif state.startswith(b'CANCELLED')
             for i, run in enumerate(batch.runlist):
                 if run.is_done():
-                    state = 'success'
+                    db_state = 'success'
                 else:
-                    state = 'failed(cancelled)'
+                    db_state = 'failed (CANCELLED)'
                 db.execute('''UPDATE Job SET State=? WHERE Batch_id=? AND Job_id=?''',
-                           (state, batchid, i))
+                           (db_state, batchid, i))
                 db.commit()
             db.execute('''UPDATE Batch SET State='cancelled' WHERE Id=?''',
                            (batchid,))
@@ -131,8 +133,11 @@ def archive(db):
 db = sqlite3.connect('jobdb.sqlite3')
 in_queue = waiting_jobs()
 print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-#prepare_input(db, 1, mode='random')
-#queue(db, 2)
-finished_check(db)
+prepare_input(db, 1, mode='specific', batchid=20)
+prepare_input(db, 1, mode='specific', batchid=400)
+prepare_input(db, 1, mode='specific', batchid=800)
+prepare_input(db, 1, mode='specific', batchid=1200)
+queue(db, 4)
+#finished_check(db)
 #archive(db)
 db.close()
