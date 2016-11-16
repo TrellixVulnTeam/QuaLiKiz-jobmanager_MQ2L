@@ -62,9 +62,11 @@ with open('10D database suggestion.csv') as csvfile:
     for row in reader:
         if row[0] == '':
             break
-        print(row)
         scan_plan[row[1]] = [float(x) for x in row[4:] if x != '']
-        print('complete plan:' + str(scan_plan))
+
+print('Read CSV:')
+for name, values in scan_plan.items():
+    print('{:<12}'.format(name) + ' ' + str(values))
 
 # Use the parameters.json as base for our hypercube
 base_plan = QuaLiKizPlan.from_json('./parameters.json')
@@ -81,6 +83,10 @@ qualikiz_chunck = ['Ati', 'Ate', 'Ane', 'qx']
 for name in qualikiz_chunck:
     base_plan['scan_dict'][name] = scan_plan.pop(name)
 
+print('\n\rSmallest chunk:')
+for name, values in base_plan['scan_dict'].items():
+    print('{:<12}'.format(name) + ' ' + str(values))
+
 # Sort the remaining parameters based on LMS difference from center value
 scan_vip = {}
 scan_vip['epsilon'] = 0.15
@@ -90,7 +96,6 @@ scan_vip['Nustar'] = 1e-3
 scan_vip['smag'] = 1
 for key, item in scan_plan.items():
     scan_plan[key] = sorted(item, key=lambda x: (x - scan_vip[key])**2) #pylint: disable=cell-var-from-loop
-    print(scan_plan[key])
 
 # Debugging: Remove all but one value for scan_plan
 #for key, item in scan_plan.items():
@@ -105,14 +110,21 @@ for name in batch_chunck:
     batch_variable[name] = scan_plan.pop(name)
     db.execute('''ALTER TABLE job ADD COLUMN ''' + name + ''' REAL''')
 
+print('\n\rBatch:')
+for name, values in batch_variable.items():
+    print('{:<12}'.format(name) + ' ' + str(values))
+
 
 # We can now make a hypercube over all remaining parameters
 # Lets reverse the list so the priority is correct
 scan_plan = OrderedDict(reversed(list(scan_plan.items())))
 
 batchlist = []
-for name in scan_plan:
+print('\n\rScan:')
+for name, values in scan_plan.items():
+    print('{:<12}'.format(name) + ' ' + str(values))
     db.execute('''ALTER TABLE batch ADD COLUMN ''' + name + ''' REAL''')
+print()
 
 # Initialize some database stuff
 insert_job_string = ('''INSERT INTO job VALUES (?, ?, ?, ? ''' +
