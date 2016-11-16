@@ -2,8 +2,9 @@ import sqlite3
 import warnings
 from qualikiz_tools.qualikiz_io.qualikizrun import QuaLiKizBatch, QuaLiKizRun
 import subprocess as sp
+from warnings import warn
+from IPython import embed
 
-queuelimit = 1
 def prepare_input(db, amount, mode='ordered', batchid=None):
     if mode == 'ordered':
         query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' LIMIT ?''', (str(amount),))
@@ -11,7 +12,9 @@ def prepare_input(db, amount, mode='ordered', batchid=None):
         query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' ORDER BY RANDOM() LIMIT ?''', (str(amount),))
     elif mode == 'specific':
         query = db.execute('''SELECT Id, Path FROM batch WHERE State='prepared' AND Id=? LIMIT ?''', (batchid, str(amount)))
-    for el in query:
+    querylist = query.fetchall()
+    print(querylist)
+    for el in querylist:
         print (el)
         batchid = el[0]
         dir = el[1]
@@ -34,7 +37,9 @@ def prepare_input(db, amount, mode='ordered', batchid=None):
 
 def queue(db, amount):
     query = db.execute('''SELECT Id, Path FROM batch WHERE State='inputed' LIMIT ?''', (str(amount),))
-    for el in query:
+    querylist = query.fetchall()
+    print(querylist)
+    for el in querylist:
         print(el)
         batchid = el[0]
         dir = el[1]
@@ -58,8 +63,9 @@ def waiting_jobs():
 
 def finished_check(db):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch WHERE State='queued' ''')
+    querylist = query.fetchall()
     batch_notdone = 0
-    for el in query:
+    for el in querylist:
         batchid = el[0]
         dir = el[1]
         jobnumber = el[2]
@@ -88,16 +94,28 @@ def finished_check(db):
             db.execute('''UPDATE Batch SET State=? WHERE Id=?''',
                            (state, batchid))
             db.commit()
-        elif state.startswith(b'CANCELLED')
+        elif state.startswith(b'CANCELLED'):
             for i, run in enumerate(batch.runlist):
                 if run.is_done():
                     db_state = 'success'
                 else:
-                    db_state = 'failed (CANCELLED)'
-                db.execute('''UPDATE Job SET State=? WHERE Batch_id=? AND Job_id=?''',
+                    db_state = 'failed'
+                db.execute('''UPDATE Job SET State=? AND Note='CANCELLED' WHERE Batch_id=? AND Job_id=?''',
                            (db_state, batchid, i))
                 db.commit()
-            db.execute('''UPDATE Batch SET State='cancelled' WHERE Id=?''',
+            db.execute('''UPDATE Batch SET State='cancelled' and Note='TIMEOUT' WHERE Id=?''',
+                           (batchid,))
+            db.commit()
+        elif state == (b'TIMEOUT'):
+            for i, run in enumerate(batch.runlist):
+                if run.is_done():
+                    db_state = 'success'
+                else:
+                    db_state = 'failed'
+                db.execute('''UPDATE Job SET State=? AND Note='TIMEOUT' WHERE Batch_id=? AND Job_id=?''',
+                           (db_state, batchid, i))
+                db.commit()
+            db.execute('''UPDATE Batch SET State='failed' AND Note='TIMEOUT' WHERE Id=?''',
                            (batchid,))
             db.commit()
 
@@ -109,18 +127,36 @@ def finished_check(db):
 import os
 import tarfile
 import shutil
-def archive(db):
-    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch WHERE State='success' ''')
-    for el in query:
+def archive(db, limit):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch WHERE State='netcdfized' LIMIT ?''', (limit, ))
+    querylist = query.fetchall()
+    for el in querylist:
+        print(el)
+        batchid = el[0]
+        batchdir = el[1]
+        batchsdir, name = os.path.split(batchdir)
+        netcdf_path = os.path.join(batchdir, name + '.nc')
+        os.rename(netcdf_path, os.path.join(batchsdir, name + '.nc'))
+        with tarfile.open(batchdir + '.tar', 'w') as tar:
+            tar.add(batchdir, arcname=os.path.basename(batchdir))
+        if os.path.isfile(batchdir + '.tar'):
+            shutil.rmtree(batchdir)
+            db.execute('''UPDATE Batch SET State='archived' WHERE Id=?''',
+                      (batchid, ))
+            db.commit()
+
+
+def netcdfize(db, limit):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch WHERE State='success' LIMIT ?''', (limit,))
+    querylist = query.fetchall()
+    for el in querylist:
+        print(el)
         batchid = el[0]
         dir = el[1]
         batch = QuaLiKizBatch.from_dir(dir)
+        batch.to_netcdf()
         for i, run in enumerate(batch.runlist):
-            run.to_netcdf(overwrite=False)
-            netcdf_path = os.path.join(run.rundir, QuaLiKizRun.netcdfpath)
-            tmp_netcdf_path = os.path.join(run.rundir, '..', os.path.basename(run.rundir) + '.nc')
-            os.rename(netcdf_path, tmp_netcdf_path)
-
+            print('Archiving ' + run.rundir)
             with tarfile.open(run.rundir + '.tar.gz', 'w:gz') as tar:
                 tar.add(run.rundir, arcname=os.path.basename(run.rundir))
             if os.path.isfile(run.rundir + '.tar.gz'):
@@ -128,16 +164,39 @@ def archive(db):
                 db.execute('''UPDATE Job SET State='archived' WHERE Batch_id=? AND Job_id=?''',
                            (batchid, i))
                 db.commit()
+        db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
+        db.commit()
+
+def trash(db):
+    resp = input('Warning: This operation is destructive! Are you sure? [Y/n]')
+    if resp == '' or resp == 'Y' or resp == 'y':
+        query = db.execute('''SELECT Id, Path from batch WHERE State='prepared' ''')
+        querylist = query.fetchall()
+        for el in querylist:
+            print(el)
+            batchid = el[0]
+            dir = el[1]
+            try:
+                shutil.rmtree(dir)
+            except FileNotFoundError:
+                warn(dir + ' already gone')
+            db.execute('''UPDATE Batch SET State='thrashed' WHERE Id=?''', (batchid, ))
+            db.commit()
 
 
+
+queuelimit = 1
 db = sqlite3.connect('jobdb.sqlite3')
-in_queue = waiting_jobs()
-print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-prepare_input(db, 1, mode='specific', batchid=20)
-prepare_input(db, 1, mode='specific', batchid=400)
-prepare_input(db, 1, mode='specific', batchid=800)
-prepare_input(db, 1, mode='specific', batchid=1200)
-queue(db, 4)
-#finished_check(db)
-#archive(db)
+#in_queue = waiting_jobs()
+#print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
+#prepare_input(db, 1, mode='specific', batchid=20)
+#prepare_input(db, 1, mode='specific', batchid=400)
+#prepare_input(db, 1, mode='specific', batchid=800)
+#prepare_input(db, 1, mode='specific', batchid=1200)
+#queue(db, 4)
+finished_check(db)
+#netcdfize(db, 2)
+#embed()
+#archive(db, 2)
+#trash(db)
 db.close()
