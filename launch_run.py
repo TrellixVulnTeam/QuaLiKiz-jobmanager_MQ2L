@@ -202,18 +202,14 @@ def trash(db):
 
 
 
-queuelimit = 1
-jobdb = sqlite3.connect('jobjobdb.sqlite3')
-#in_queue = waiting_jobs()
-#print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-#prepare_input(jobdb, 1, mode='specific', batchid=20)
-#prepare_input(jobdb, 1, mode='specific', batchid=400)
-#prepare_input(jobdb, 1, mode='specific', batchid=800)
-#prepare_input(jobdb, 1, mode='specific', batchid=1200)
-#queue(jobdb, 4)
+queuelimit = 100
+jobdb = sqlite3.connect('jobdb.sqlite3')
+in_queue = waiting_jobs()
+print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
+#prepare_input(jobdb, queuelimit-in_queue))
+#queue(jobdb, queuelimit-in_queue)
 finished_check(jobdb)
-#netcdfize(jobdb, 2)
-#embed()
-#archive(jobdb, 2)
+#netcdfize(jobdb, 1)
+#archive(jobdb, 1)
 #trash(jobdb)
 jobdb.close()
