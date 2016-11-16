@@ -1,7 +1,7 @@
 {
     "scan_dict": {"empty": []
     },
-    "scan_type": "hyperedge",
+    "scan_type": "hyperrect",
     "xpoint_base": {
         "meta": {
             "phys_meth": 1,
