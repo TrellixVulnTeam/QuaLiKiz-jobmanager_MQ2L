@@ -8,7 +8,7 @@ import os
 lockfile = 'launch_run.py.lock'
 if os.path.exists(lockfile):
     exit('Lock file exists')
-with open('launch_run.py.lock', 'w') as lock:
+with open(lockfile, 'w') as lock:
     pass
 import sqlite3
 import warnings
@@ -84,6 +84,7 @@ def finished_check(db):
     querylist = query.fetchall()
     batch_notdone = 0
     for el in querylist:
+        print('Checking ' + str(el))
         batchid = el[0]
         batchdir = el[1]
         jobnumber = el[2]
@@ -93,7 +94,12 @@ def finished_check(db):
         output = sp.check_output(['sacct',
                                   '--brief', '--noheader', '--parsable2',
                                   '--job', str(jobnumber)])
-        jobline = output.splitlines()[0]
+        try:
+            jobline = output.splitlines()[0]
+        except IndexError:
+            print('Something went wrong!')
+            print(output)
+
         __, state, __ = jobline.split(b'|')
         print(state)
         if state == b'COMPLETED':
@@ -250,15 +256,17 @@ queuelimit = 100
 jobdb = sqlite3.connect('jobdb.sqlite3')
 in_queue = waiting_jobs()
 print(str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-#prepare_input(jobdb, queuelimit-in_queue)
-#queue(jobdb, queuelimit-in_queue)
+prepare_input(jobdb, queuelimit-in_queue)
+queue(jobdb, queuelimit-in_queue)
 #cancel(jobdb, 'Ti_Te_rel<=0.5')
 #hold(jobdb, 'Ti_Te_rel<=0.5')
 finished_check(jobdb)
-#netcdfize(jobdb, 5)
+netcdfize(jobdb, 1)
+finished_check(jobdb)
 #archive(jobdb, 1)
 #trash(jobdb)
 jobdb.close()
 
 print('Script done')
-os.remove('launch_run.py.lock')
+os.remove(lockfile)
+exit()
