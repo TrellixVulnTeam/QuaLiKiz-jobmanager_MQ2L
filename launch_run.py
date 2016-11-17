@@ -3,11 +3,17 @@ Copyright Dutch Institute for Fundamental Energy Research (2016)
 Contributors: Karel van de Plassche (karelvandeplassche@gmail.com)
 License: CeCILL v2.1
 """
+# Suggestion: Run with python launch_run.py > launch_run.py.log 2>&1 &
+import os
+lockfile = 'launch_run.py.lock'
+if os.path.exists(lockfile):
+    exit('Lock file exists')
+with open('launch_run.py.lock', 'w') as lock:
+    pass
 import sqlite3
 import warnings
 from warnings import warn
 import subprocess as sp
-import os
 import tarfile
 import shutil
 
@@ -98,14 +104,14 @@ def finished_check(db):
                 else:
                     state = 'failed'
                     batch_success = False
-                db.execute('''UPDATE Job SET State=? WHERE Batch_id=? AND Job_id=?''',
+                db.execute('''UPDATE Job SET State=?, Note='Unknown' WHERE Batch_id=? AND Job_id=?''',
                            (state, batchid, i))
                 db.commit()
             if batch_success:
                 state = 'success'
             else:
                 state = 'failed'
-            db.execute('''UPDATE Batch SET State=? WHERE Id=?''',
+            db.execute('''UPDATE Batch SET State=?, Note='Unknown' WHERE Id=?''',
                        (state, batchid))
             db.commit()
         elif state.startswith(b'CANCELLED'):
@@ -114,11 +120,11 @@ def finished_check(db):
                     db_state = 'success'
                 else:
                     db_state = 'failed'
-                db.execute('''UPDATE Job SET State=? AND Note='CANCELLED'
+                db.execute('''UPDATE Job SET State=?, Note='CANCELLED'
                            WHERE Batch_id=? AND Job_id=?''',
                            (db_state, batchid, i))
                 db.commit()
-            db.execute('''UPDATE Batch SET State='cancelled' and Note='TIMEOUT'
+            db.execute('''UPDATE Batch SET State='failed', Note='CANCELLED'
                        WHERE Id=?''', (batchid,))
             db.commit()
         elif state == (b'TIMEOUT'):
@@ -127,11 +133,11 @@ def finished_check(db):
                     db_state = 'success'
                 else:
                     db_state = 'failed'
-                db.execute('''UPDATE Job SET State=? AND Note='TIMEOUT'
+                db.execute('''UPDATE Job SET State=?, Note='TIMEOUT'
                            WHERE Batch_id=? AND Job_id=?''',
                            (db_state, batchid, i))
                 db.commit()
-            db.execute('''UPDATE Batch SET State='failed' AND Note='TIMEOUT'
+            db.execute('''UPDATE Batch SET State='failed', Note='TIMEOUT'
                        WHERE Id=?''', (batchid,))
             db.commit()
 
@@ -184,6 +190,43 @@ def netcdfize(db, limit):
         db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
         db.commit()
 
+def cancel(db, criteria):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+                       WHERE State='queued' AND ''' + criteria) 
+    querylist = query.fetchall()
+    for el in querylist:
+        print(el)
+        batchid = el[0]
+        batchdir = el[1]
+        jobnumber = el[2]
+        output = sp.check_output(['scancel', str(jobnumber)])
+        state = 'cancelled'
+        db.execute('''UPDATE Batch SET State=?
+                   WHERE Id=?''',
+                   (state, batchid))
+        db.execute('''UPDATE Job SET State=?
+                   WHERE Batch_id=?''',
+                   (state, batchid ))
+        db.commit()
+
+def hold(db, criteria):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+                       WHERE State='inputed' OR State='prepared' AND ''' + criteria) 
+    querylist = query.fetchall()
+    for el in querylist:
+        print(el)
+        batchid = el[0]
+        batchdir = el[1]
+        jobnumber = el[2]
+        state = 'hold'
+        db.execute('''UPDATE Batch SET State=?
+                   WHERE Id=?''',
+                   (state, batchid))
+        db.execute('''UPDATE Job SET State=?
+                   WHERE Batch_id=?''',
+                   (state, batchid ))
+        db.commit()
+
 def trash(db):
     resp = input('Warning: This operation is destructive! Are you sure? [Y/n]')
     if resp == '' or resp == 'Y' or resp == 'y':
@@ -202,14 +245,20 @@ def trash(db):
 
 
 
+
 queuelimit = 100
 jobdb = sqlite3.connect('jobdb.sqlite3')
 in_queue = waiting_jobs()
-print (str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-#prepare_input(jobdb, queuelimit-in_queue))
+print(str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
+#prepare_input(jobdb, queuelimit-in_queue)
 #queue(jobdb, queuelimit-in_queue)
+#cancel(jobdb, 'Ti_Te_rel<=0.5')
+#hold(jobdb, 'Ti_Te_rel<=0.5')
 finished_check(jobdb)
-#netcdfize(jobdb, 1)
+#netcdfize(jobdb, 5)
 #archive(jobdb, 1)
 #trash(jobdb)
 jobdb.close()
+
+print('Script done')
+os.remove('launch_run.py.lock')
