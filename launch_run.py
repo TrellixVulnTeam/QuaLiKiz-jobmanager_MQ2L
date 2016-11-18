@@ -233,6 +233,18 @@ def hold(db, criteria):
                    (state, batchid ))
         db.commit()
 
+def tar(db, criteria, limit):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+                       WHERE ''' + criteria + ''' LIMIT ?''', (limit, )) 
+    querylist = query.fetchall()
+    for el in querylist:
+        print(el)
+        batchid = el[0]
+        batchdir = el[1]
+        jobnumber = el[2]
+        with tarfile.open(batchdir + '.tar.gz', 'w:gz') as tar:
+            tar.add(batchdir, arcname=os.path.basename(batchdir))
+
 def trash(db):
     resp = input('Warning: This operation is destructive! Are you sure? [Y/n]')
     if resp == '' or resp == 'Y' or resp == 'y':
@@ -255,11 +267,13 @@ def trash(db):
 queuelimit = 100
 jobdb = sqlite3.connect('jobdb.sqlite3')
 in_queue = waiting_jobs()
-print(str(in_queue) + ' jobs in queue. Submitting ' + str(queuelimit-in_queue))
-prepare_input(jobdb, queuelimit-in_queue)
-queue(jobdb, queuelimit-in_queue)
+numsubmit = max(0, queuelimit-in_queue)
+print(str(in_queue) + ' jobs in queue. Submitting ' + str(numsubmit))
+prepare_input(jobdb, numsubmit)
+queue(jobdb, numsubmit)
 #cancel(jobdb, 'Ti_Te_rel<=0.5')
 #hold(jobdb, 'Ti_Te_rel<=0.5')
+#tar(jobdb, 'Ti_Te_rel==0.5', 2)
 finished_check(jobdb)
 netcdfize(jobdb, 1)
 finished_check(jobdb)
@@ -268,5 +282,6 @@ finished_check(jobdb)
 jobdb.close()
 
 print('Script done')
+print(os.listdir())
 os.remove(lockfile)
 exit()
