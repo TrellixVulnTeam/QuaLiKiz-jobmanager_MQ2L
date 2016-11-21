@@ -22,6 +22,8 @@ import time
 import pwd
 import grp
 import subprocess
+import glob
+import os
 
 from IPython import embed #pylint: disable=unused-import
 
@@ -198,6 +200,42 @@ def archive(db, limit):
         archive_el(db, el)
 
 
+def clean_success(db, criteria):
+    resp = input('Warning: This operation is destructive! Are you sure? [y/N]')
+    if resp == 'Y' or resp == 'y':
+        query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+                           WHERE State='success' AND ''' + criteria) 
+        querylist = query.fetchall()
+        for el in querylist:
+            print('Cleaning ' + str(el))
+            batchid = el[0]
+            batchdir = el[1]
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                batch = QuaLiKizBatch.from_dir(batchdir)
+            batch.clean()
+
+def denetcdfize(db, criteria):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+                       WHERE State='netcdfized' AND ''' + criteria) 
+    querylist = query.fetchall()
+    for el in querylist:
+        batchid = el[0]
+        batchdir = el[1]
+        nc_files = glob.glob(batchdir + '/*.nc')
+        for nc_file in nc_files:
+            print('Removing ' + nc_file)
+            os.remove(nc_file)
+        tar_gz_files = glob.glob(batchdir + '/*.tar.gz')
+        for tar_gz_file in tar_gz_files:
+            with tarfile.open(tar_gz_file, 'r:gz') as tar:
+                print('Untarring ' + tar_gz_file)
+                tar.extractall(path=batchdir)
+            os.remove(tar_gz_file)
+        db.execute('''UPDATE Batch SET State='success' WHERE Id=?''', (batchid, ))
+        db.commit()
+
+
 def netcdfize_el(db, el):
     print(el)
     batchid = el[0]
@@ -254,6 +292,7 @@ def cancel(db, criteria):
                    (state, batchid ))
         db.commit()
 
+
 def hold(db, criteria):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
                        WHERE State='inputed' OR State='prepared' AND ''' + criteria) 
@@ -285,8 +324,8 @@ def tar(db, criteria, limit):
             tar.add(batchdir, arcname=os.path.basename(batchdir))
 
 def trash(db):
-    resp = input('Warning: This operation is destructive! Are you sure? [Y/n]')
-    if resp == '' or resp == 'Y' or resp == 'y':
+    resp = input('Warning: This operation is destructive! Are you sure? [y/N]')
+    if resp == 'Y' or resp == 'y':
         query = db.execute('''SELECT Id, Path from batch WHERE State='prepared' ''')
         querylist = query.fetchall()
         for el in querylist:
@@ -316,7 +355,9 @@ if __name__ == '__main__':
     #netcdfize(jobdb, 1)
     print('I can see ' + str(os.listdir()))
     #finished_check(jobdb)
-    archive(jobdb, 1)
+    #archive(jobdb, 1)
+    #denetcdfize(jobdb, 'Id==5')
+    #clean_success(jobdb, 'Id==5')
     #trash(jobdb)
     jobdb.close()
 
