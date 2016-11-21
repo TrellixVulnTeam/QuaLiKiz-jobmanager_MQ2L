@@ -19,6 +19,9 @@ import tarfile
 import shutil
 import sys
 import time
+import pwd
+import grp
+import subprocess
 
 from IPython import embed #pylint: disable=unused-import
 
@@ -154,26 +157,45 @@ def finished_check(db):
             batch_notdone += 1
     print(str(batch_notdone) + ' not done')
 
+def archive_el(db, el):
+    print('Archiving: ' + str(el))
+    batchid = el[0]
+    batchdir = el[1]
+    Zeff = el[2]
+    Nustar = el[3]
+    Ti_Te_rel = el[4]
+
+    query = db.execute('''SELECT Path FROM Archive_netcdf
+                          WHERE Zeff==? AND Nustar==? AND Ti_Te_rel==?''',
+                       (Zeff, Nustar, Ti_Te_rel))
+    
+    hsi_basepath = query.fetchall()[0][0]
+    batchsdir, name = os.path.split(batchdir)
+    netcdf_hsi_path = os.path.join(hsi_basepath, name + '.nc')
+
+    netcdf_path_current = os.path.join(batchdir, name + '.nc')
+    netcdf_path_target = os.path.join(batchsdir, name + '.nc')
+    # We'll leave a copy behind
+    os.rename(netcdf_path_current, netcdf_path_target)
+    subprocess.check_call(['hsi \"put ' + netcdf_path_target + ' : ' + netcdf_hsi_path + '\"'], shell=True)
+    subprocess.check_call(['hsi \"chown karel:m2116 ' + netcdf_hsi_path+ '\"'], shell=True)
+
+    # Now archive the folder
+    archive_hsi_base = 'megarun_one_archive/'
+    archive_hsi_path = os.path.join(archive_hsi_base, os.path.basename(batchdir) + '.tar')
+    subprocess.check_call(['htar -cf ' + archive_hsi_path + ' ' + batchdir + ' -C ' + batchsdir], shell=True)
+    subprocess.check_call(['hsi \"chown karel:m2116 ' + archive_hsi_path + ' ' + archive_hsi_path + '.idx\"'], shell=True)
+
+    db.execute('''UPDATE Batch SET State='archived' WHERE Id=?''',
+                   (batchid, ))
+    db.commit()
+
 def archive(db, limit):
-    raise NotImplemetedError()
-    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+    query = db.execute('''SELECT Id, Path, Zeff, Nustar, Ti_Te_rel FROM batch
                        WHERE State='netcdfized' LIMIT ?''', (limit, ))
     querylist = query.fetchall()
     for el in querylist:
-        print('Archiving: ' + str(el))
-        batchid = el[0]
-        batchdir = el[1]
-        batchsdir, name = os.path.split(batchdir)
-        netcdf_path = os.path.join(batchdir, name + '.nc')
-        netcdf_target = ''
-        os.rename(netcdf_path, os.path.join(batchsdir, name + '.nc'))
-        with tarfile.open(batchdir + '.tar', 'w') as tar:
-            tar.add(batchdir, arcname=os.path.basename(batchdir))
-        if os.path.isfile(batchdir + '.tar'):
-            shutil.rmtree(batchdir)
-            db.execute('''UPDATE Batch SET State='archived' WHERE Id=?''',
-                       (batchid, ))
-            db.commit()
+        archive_el(db, el)
 
 
 def netcdfize_el(db, el):
@@ -285,16 +307,16 @@ if __name__ == '__main__':
     numsubmit = max(0, queuelimit-in_queue)
     print(str(in_queue) + ' jobs in queue. Submitting ' + str(numsubmit))
     print('I can see ' + str(os.listdir()))
-    prepare_input(jobdb, numsubmit)
-    queue(jobdb, numsubmit)
+    #prepare_input(jobdb, numsubmit)
+    #queue(jobdb, numsubmit)
     #cancel(jobdb, 'Ti_Te_rel<=0.5')
     #hold(jobdb, 'epsilon==0.33')
     #tar(jobdb, 'Ti_Te_rel==0.5', 2)
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
     print('I can see ' + str(os.listdir()))
-    finished_check(jobdb)
-    #archive(jobdb, 1)
+    #finished_check(jobdb)
+    archive(jobdb, 1)
     #trash(jobdb)
     jobdb.close()
 
