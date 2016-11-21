@@ -41,4 +41,5 @@ for values in itertools.product(*variables.values()):
     os.makedirs(folderstring)
 
 subprocess.call(['hsi \"put -PR ' + folderbase + ' ' + folderbase + '\"'], shell=True)
+subprocess.call(['hsi \"chown -R karel:m2116 ' + folderbase + '\"'], shell=True)
 jobdb.commit()
