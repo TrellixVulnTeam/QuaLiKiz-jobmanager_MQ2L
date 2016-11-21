@@ -8,14 +8,14 @@ import shutil
 import subprocess
 
 jobdb = sqlite3.connect('jobdb.sqlite3')
-folderbase = 'megarun_one_netcdf/'
-try:
-    jobdb.execute('''CREATE TABLE Archive_netcdf (
-                      Path           TEXT,
-                      Zeff           REAL,
-                      Nustar         REAL,
-                      Ti_Te_rel      REAL
-                  )''')
+folderbase = 'megarun_one_netcdf'
+os.mkdir(folderbase)
+jobdb.execute('''CREATE TABLE Archive_netcdf (
+                  Path           TEXT,
+                  Zeff           REAL,
+                  Nustar         REAL,
+                  Ti_Te_rel      REAL
+              )''')
 variables = OrderedDict([('Zeff'     , None),
                          ('Nustar'   , None),
                          ('Ti_Te_rel', None)])
@@ -38,11 +38,7 @@ for values in itertools.product(*variables.values()):
 
     jobdb.execute('INSERT INTO Archive_netcdf VALUES (?, ?, ?, ?)',
                   tuple((folderstring, )) + tuple(values))
-    megastring += 'mkdir ' + str(folderstring) + '; ' 
+    os.makedirs(folderstring)
 
-    print(folderstring)
-megastring += '\''
-
-subprocess.call(megastring, shell=True)
-print(megastring)
+subprocess.call(['hsi \"put -PR ' + folderbase + ' ' + folderbase + '\"'], shell=True)
 jobdb.commit()
