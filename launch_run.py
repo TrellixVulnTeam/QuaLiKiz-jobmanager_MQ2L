@@ -214,12 +214,16 @@ def clean_success(db, criteria):
                 warnings.simplefilter("ignore")
                 batch = QuaLiKizBatch.from_dir(batchdir)
             batch.clean()
+            db.execute('''UPDATE Batch SET State='prepared' WHERE Id=?''', (batchid, ))
+            db.execute('''UPDATE Job SET State='prepared' WHERE Batch_id=?''', (batchid, ))
+            db.commit()
 
 def denetcdfize(db, criteria):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
                        WHERE State='netcdfized' AND ''' + criteria) 
     querylist = query.fetchall()
     for el in querylist:
+        print('De-netcdfizing ' + str(el))
         batchid = el[0]
         batchdir = el[1]
         nc_files = glob.glob(batchdir + '/*.nc')
@@ -233,6 +237,7 @@ def denetcdfize(db, criteria):
                 tar.extractall(path=batchdir)
             os.remove(tar_gz_file)
         db.execute('''UPDATE Batch SET State='success' WHERE Id=?''', (batchid, ))
+        db.execute('''UPDATE Job SET State='success' WHERE Batch_id=?''', (batchid, ))
         db.commit()
 
 
@@ -356,8 +361,8 @@ if __name__ == '__main__':
     print('I can see ' + str(os.listdir()))
     #finished_check(jobdb)
     #archive(jobdb, 1)
-    #denetcdfize(jobdb, 'Id==5')
-    #clean_success(jobdb, 'Id==5')
+    denetcdfize(jobdb, 'epsilon==0.03')
+    clean_success(jobdb, 'epsilon==0.03')
     #trash(jobdb)
     jobdb.close()
 
