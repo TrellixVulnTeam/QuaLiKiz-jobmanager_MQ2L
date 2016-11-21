@@ -5,17 +5,20 @@ License: CeCILL v2.1
 """
 # Suggestion: Run with python launch_run.py > launch_run.py.log 2>&1 &
 import os
-lockfile = 'launch_run.py.lock'
-if os.path.exists(lockfile):
-    exit('Lock file exists')
-with open(lockfile, 'w') as lock:
-    pass
+if __name__ == '__main__':
+    lockfile = os.path.abspath('launch_run.py.lock')
+    if os.path.exists(lockfile):
+        exit('Lock file exists')
+    with open(lockfile, 'w') as lock:
+        pass
 import sqlite3
 import warnings
 from warnings import warn
 import subprocess as sp
 import tarfile
 import shutil
+import sys
+import time
 
 from IPython import embed #pylint: disable=unused-import
 
@@ -152,6 +155,7 @@ def finished_check(db):
     print(str(batch_notdone) + ' not done')
 
 def archive(db, limit):
+    raise NotImplemetedError()
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
                        WHERE State='netcdfized' LIMIT ?''', (limit, ))
     querylist = query.fetchall()
@@ -161,6 +165,7 @@ def archive(db, limit):
         batchdir = el[1]
         batchsdir, name = os.path.split(batchdir)
         netcdf_path = os.path.join(batchdir, name + '.nc')
+        netcdf_target = ''
         os.rename(netcdf_path, os.path.join(batchsdir, name + '.nc'))
         with tarfile.open(batchdir + '.tar', 'w') as tar:
             tar.add(batchdir, arcname=os.path.basename(batchdir))
@@ -171,18 +176,23 @@ def archive(db, limit):
             db.commit()
 
 
-def netcdfize(db, limit):
-    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
-                       WHERE State='success' LIMIT ?''', (limit,))
-    querylist = query.fetchall()
-    for el in querylist:
-        print(el)
-        batchid = el[0]
-        batchdir = el[1]
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            batch = QuaLiKizBatch.from_dir(batchdir)
+def netcdfize_el(db, el):
+    print(el)
+    batchid = el[0]
+    batchdir = el[1]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        batch = QuaLiKizBatch.from_dir(batchdir)
+    try: 
         batch.to_netcdf()
+    except:
+        e = sys.exc_info()[0]
+        print(e)
+        print(e.message)
+        print('Error netcdfing, skipping forever')
+        db.execute('''UPDATE Batch SET State='succes_nonetcdf' WHERE Id=?''', (batchid, ))
+        db.commit()
+    else:
         for i, run in enumerate(batch.runlist):
             print('Archiving ' + run.rundir)
             with tarfile.open(run.rundir + '.tar.gz', 'w:gz') as tar:
@@ -195,6 +205,13 @@ def netcdfize(db, limit):
                 db.commit()
         db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
         db.commit()
+
+def netcdfize(db, limit):
+    query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
+                       WHERE State='success' LIMIT ?''', (limit,))
+    querylist = query.fetchall()
+    for el in querylist:
+        netcdfize_el(db, el)
 
 def cancel(db, criteria):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
@@ -261,27 +278,35 @@ def trash(db):
             db.execute('''UPDATE Batch SET State='thrashed' WHERE Id=?''', (batchid, ))
             db.commit()
 
+if __name__ == '__main__':
+    queuelimit = 100
+    jobdb = sqlite3.connect('jobdb.sqlite3')
+    in_queue = waiting_jobs()
+    numsubmit = max(0, queuelimit-in_queue)
+    print(str(in_queue) + ' jobs in queue. Submitting ' + str(numsubmit))
+    print('I can see ' + str(os.listdir()))
+    prepare_input(jobdb, numsubmit)
+    queue(jobdb, numsubmit)
+    #cancel(jobdb, 'Ti_Te_rel<=0.5')
+    #hold(jobdb, 'epsilon==0.33')
+    #tar(jobdb, 'Ti_Te_rel==0.5', 2)
+    #finished_check(jobdb)
+    #netcdfize(jobdb, 1)
+    print('I can see ' + str(os.listdir()))
+    finished_check(jobdb)
+    #archive(jobdb, 1)
+    #trash(jobdb)
+    jobdb.close()
 
-
-
-queuelimit = 100
-jobdb = sqlite3.connect('jobdb.sqlite3')
-in_queue = waiting_jobs()
-numsubmit = max(0, queuelimit-in_queue)
-print(str(in_queue) + ' jobs in queue. Submitting ' + str(numsubmit))
-prepare_input(jobdb, numsubmit)
-queue(jobdb, numsubmit)
-#cancel(jobdb, 'Ti_Te_rel<=0.5')
-#hold(jobdb, 'Ti_Te_rel<=0.5')
-#tar(jobdb, 'Ti_Te_rel==0.5', 2)
-finished_check(jobdb)
-netcdfize(jobdb, 1)
-finished_check(jobdb)
-#archive(jobdb, 1)
-#trash(jobdb)
-jobdb.close()
-
-print('Script done')
-print(os.listdir())
-os.remove(lockfile)
-exit()
+    print('Script done')
+    print(os.listdir())
+    for i in range(10):
+        try:
+            os.remove(lockfile)
+        except:
+            print('Could not find logfile, try ' + str(i))
+            time.sleep(10)
+        else:
+            break
+    
+    exit()
