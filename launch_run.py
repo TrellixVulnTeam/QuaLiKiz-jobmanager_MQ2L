@@ -289,10 +289,10 @@ def cancel(db, criteria):
         jobnumber = el[2]
         output = sp.check_output(['scancel', str(jobnumber)])
         state = 'cancelled'
-        db.execute('''UPDATE Batch SET State=?
+        db.execute('''UPDATE Batch SET State=?, Note='Manual cancel'
                    WHERE Id=?''',
                    (state, batchid))
-        db.execute('''UPDATE Job SET State=?
+        db.execute('''UPDATE Job SET State=?, Note='Manual cancel'
                    WHERE Batch_id=?''',
                    (state, batchid ))
         db.commit()
@@ -353,16 +353,16 @@ if __name__ == '__main__':
     print('I can see ' + str(os.listdir()))
     #prepare_input(jobdb, numsubmit)
     #queue(jobdb, numsubmit)
-    #cancel(jobdb, 'Ti_Te_rel<=0.5')
-    #hold(jobdb, 'epsilon==0.33')
+    cancel(jobdb, 'epsilon==0.33')
+    hold(jobdb, 'epsilon==0.33')
     #tar(jobdb, 'Ti_Te_rel==0.5', 2)
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
     print('I can see ' + str(os.listdir()))
     #finished_check(jobdb)
     #archive(jobdb, 1)
-    denetcdfize(jobdb, 'epsilon==0.03')
-    clean_success(jobdb, 'epsilon==0.03')
+    denetcdfize(jobdb, 'epsilon==0.33')
+    clean_success(jobdb, 'epsilon==0.33')
     #trash(jobdb)
     jobdb.close()
 
