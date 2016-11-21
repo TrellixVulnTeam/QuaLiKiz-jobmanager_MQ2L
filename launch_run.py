@@ -218,6 +218,7 @@ def clean_success(db, criteria):
             db.execute('''UPDATE Job SET State='prepared' WHERE Batch_id=?''', (batchid, ))
             db.commit()
 
+
 def denetcdfize(db, criteria):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
                        WHERE State='netcdfized' AND ''' + criteria) 
@@ -267,7 +268,15 @@ def netcdfize_el(db, el):
                 db.execute('''UPDATE Job SET State='archived'
                            WHERE Batch_id=? AND Job_id=?''',
                            (batchid, i))
-                db.commit()
+                tries = 10
+                for i in range(tries):
+                    try:
+                        db.commit()
+                    except sqlite3.OperationalError:
+                        time.sleep(1)
+                else:
+                    break
+
         db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
         db.commit()
 
@@ -353,16 +362,16 @@ if __name__ == '__main__':
     print('I can see ' + str(os.listdir()))
     #prepare_input(jobdb, numsubmit)
     #queue(jobdb, numsubmit)
-    cancel(jobdb, 'epsilon==0.33')
-    hold(jobdb, 'epsilon==0.33')
+    #cancel(jobdb, 'epsilon==0.33')
+    #hold(jobdb, 'epsilon==0.33')
     #tar(jobdb, 'Ti_Te_rel==0.5', 2)
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
     print('I can see ' + str(os.listdir()))
-    #finished_check(jobdb)
+    finished_check(jobdb)
     #archive(jobdb, 1)
-    denetcdfize(jobdb, 'epsilon==0.33')
-    clean_success(jobdb, 'epsilon==0.33')
+    #denetcdfize(jobdb, 'epsilon==0.33')
+    #clean_success(jobdb, 'epsilon==0.33')
     #trash(jobdb)
     jobdb.close()
 
