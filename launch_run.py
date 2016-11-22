@@ -178,9 +178,9 @@ def archive_el(db, el):
     netcdf_path_current = os.path.join(batchdir, name + '.nc')
     netcdf_path_target = os.path.join(batchsdir, name + '.nc')
     # We'll leave a copy behind
-    os.rename(netcdf_path_current, netcdf_path_target)
-    subprocess.check_call(['hsi \"put ' + netcdf_path_target + ' : ' + netcdf_hsi_path + '\"'], shell=True)
+    subprocess.check_call(['hsi \"put ' + netcdf_path_current + ' : ' + netcdf_hsi_path + '\"'], shell=True)
     subprocess.check_call(['hsi \"chown karel:m2116 ' + netcdf_hsi_path+ '\"'], shell=True)
+    os.rename(netcdf_path_current, netcdf_path_target)
 
     # Now archive the folder
     archive_hsi_base = 'megarun_one_archive/'
@@ -217,6 +217,60 @@ def clean_success(db, criteria):
             db.execute('''UPDATE Batch SET State='prepared' WHERE Id=?''', (batchid, ))
             db.execute('''UPDATE Job SET State='prepared' WHERE Batch_id=?''', (batchid, ))
             db.commit()
+
+
+def check_sanity(db):
+    query = db.execute('''SELECT Id, Path, Jobnumber, State FROM batch''')
+                       
+    querylist = query.fetchall()
+    for el in querylist:
+        print('Sanity checking ' + str(el))
+        batchid = el[0]
+        batchdir = el[1]
+        jobnumber = el[2]
+        state = el[3]
+        changed_els = []
+        notfixed_els = []
+        if state == 'success':
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                try:
+                    batch = QuaLiKizBatch.from_dir(batchdir)
+                except Exception as e:
+                    if e.args[0] == 'Could not find run':
+                        print(str(el) + ' is insane! Checking if netcdfized')
+                        if os.path.exists(os.path.join(batchdir, os.path.basename(batchdir) + '.nc')):
+                            print('NetCDF exists')
+                            tarred_files = glob.glob(batchdir + '/*.tar.gz')
+                            jobquery = db.execute('''SELECT Job_id from Job WHERE Batch_id==?''', (batchid, ))
+                            jobid_list = jobquery.fetchall()
+                            print(str(len(tarred_files)) + ' tarred files of ' + str(len(jobid_list)) + ' jobs')
+                            if len(tarred_files) == len(jobid_list):
+                                print('Probably netcdfized. Changing state')
+                                db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
+                                db.execute('''UPDATE Job SET State='netcdfized'
+                                              WHERE Batch_id=?''',
+                                              (batchid, ))
+                                changed_els.append(el)
+                            else:
+                                notfixed_els.append(el)
+
+                        else:
+                            print('Not netcdfized. Give up! Please check manually')
+                            notfixed_els.append(el)
+                    else:
+                        raise
+                else:
+                    batch_success = True
+                    for i, run in enumerate(batch.runlist):
+                        if run.is_done():
+                            pass
+                        else:
+                            batch_success = False
+                    if not batch_success:
+                        print(str(el) + ' is insane!')
+    print('Changed ids: ' + str(changed_els))
+    print('Not fixed ids: ' + str(notfixed_els))
 
 
 def denetcdfize(db, criteria):
@@ -368,8 +422,9 @@ if __name__ == '__main__':
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
     print('I can see ' + str(os.listdir()))
-    finished_check(jobdb)
-    #archive(jobdb, 1)
+    #check_sanity(jobdb)
+    #finished_check(jobdb)
+    archive(jobdb, 10)
     #denetcdfize(jobdb, 'epsilon==0.33')
     #clean_success(jobdb, 'epsilon==0.33')
     #trash(jobdb)
