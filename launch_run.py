@@ -350,7 +350,6 @@ if __name__ == '__main__':
     in_queue = waiting_jobs()
     numsubmit = max(0, queuelimit-in_queue)
     print(str(in_queue) + ' jobs in queue. Submitting ' + str(numsubmit))
-    print('I can see ' + str(os.listdir()))
     prepare_input(jobdb, numsubmit)
     queue(jobdb, numsubmit)
     #cancel(jobdb, 'state==\'queued\'')
@@ -358,7 +357,6 @@ if __name__ == '__main__':
     #tar(jobdb, 'Ti_Te_rel==0.5', 2)
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
-    print('I can see ' + str(os.listdir()))
     #finished_check(jobdb)
     #archive(jobdb, 30)
     #denetcdfize(jobdb, 'epsilon==0.33')
@@ -367,14 +365,6 @@ if __name__ == '__main__':
     jobdb.close()
 
     print('Script done')
-    print(os.listdir())
-    for i in range(10):
-        try:
-            os.remove(lockfile)
-        except:
-            print('Could not find logfile, try ' + str(i))
-            time.sleep(10)
-        else:
-            break
+    os.remove(lockfile)
     
     exit()
