@@ -200,11 +200,11 @@ def archive(db, limit):
         archive_el(db, el)
 
 
-def clean_success(db, criteria):
+def clean(db, state, criteria):
     resp = input('Warning: This operation is destructive! Are you sure? [y/N]')
     if resp == 'Y' or resp == 'y':
         query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
-                           WHERE State='success' AND ''' + criteria) 
+                           WHERE State==? AND ''' + criteria, (state, )) 
         querylist = query.fetchall()
         for el in querylist:
             print('Cleaning ' + str(el))
@@ -223,14 +223,14 @@ def check_sanity(db):
     query = db.execute('''SELECT Id, Path, Jobnumber, State FROM batch''')
                        
     querylist = query.fetchall()
+    changed_els = []
+    notfixed_els = []
     for el in querylist:
         print('Sanity checking ' + str(el))
         batchid = el[0]
         batchdir = el[1]
         jobnumber = el[2]
         state = el[3]
-        changed_els = []
-        notfixed_els = []
         if state == 'success':
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
@@ -251,9 +251,12 @@ def check_sanity(db):
                                 db.execute('''UPDATE Job SET State='netcdfized'
                                               WHERE Batch_id=?''',
                                               (batchid, ))
+                                db.commit()
                                 changed_els.append(el)
+                            elif len(tarred_files) > 0:
+                                notfixed_els.append({'el': el, 'strat': 'targz'})
                             else:
-                                notfixed_els.append(el)
+                                notfixed_els.append({'el': el, 'strat': 'check netcdf'})
 
                         else:
                             print('Not netcdfized. Give up! Please check manually')
@@ -269,8 +272,14 @@ def check_sanity(db):
                             batch_success = False
                     if not batch_success:
                         print(str(el) + ' is insane!')
-    print('Changed ids: ' + str(changed_els))
-    print('Not fixed ids: ' + str(notfixed_els))
+    print()
+    print('Changed ids:')
+    for el in changed_els:
+        print(el)
+    print()
+    print('Not fixed ids:')
+    for dict_ in notfixed_els:
+        print(dict_['strat'] + ',' + dict_['el'][1])
 
 
 def denetcdfize(db, criteria):
@@ -313,6 +322,7 @@ def netcdfize_el(db, el):
         db.execute('''UPDATE Batch SET State='succes_nonetcdf' WHERE Id=?''', (batchid, ))
         db.commit()
     else:
+        tries = 10
         for i, run in enumerate(batch.runlist):
             print('Archiving ' + run.rundir)
             with tarfile.open(run.rundir + '.tar.gz', 'w:gz') as tar:
@@ -322,15 +332,7 @@ def netcdfize_el(db, el):
                 db.execute('''UPDATE Job SET State='archived'
                            WHERE Batch_id=? AND Job_id=?''',
                            (batchid, i))
-                tries = 10
-                for i in range(tries):
-                    try:
-                        db.commit()
-                    except sqlite3.OperationalError:
-                        time.sleep(1)
-                else:
-                    break
-
+                db.commit()
         db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
         db.commit()
 
@@ -363,7 +365,7 @@ def cancel(db, criteria):
 
 def hold(db, criteria):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
-                       WHERE State='inputed' OR State='prepared' AND ''' + criteria) 
+                       WHERE OR State='prepared' AND ''' + criteria) 
     querylist = query.fetchall()
     for el in querylist:
         print(el)
@@ -409,24 +411,24 @@ def trash(db):
 
 if __name__ == '__main__':
     queuelimit = 100
-    jobdb = sqlite3.connect('jobdb.sqlite3')
+    jobdb = sqlite3.connect('jobdb.sqlite3', timeout=300, cached_statements=2000)
     in_queue = waiting_jobs()
     numsubmit = max(0, queuelimit-in_queue)
     print(str(in_queue) + ' jobs in queue. Submitting ' + str(numsubmit))
     print('I can see ' + str(os.listdir()))
     #prepare_input(jobdb, numsubmit)
     #queue(jobdb, numsubmit)
-    #cancel(jobdb, 'epsilon==0.33')
+    #cancel(jobdb, 'state==\'queued\'')
     #hold(jobdb, 'epsilon==0.33')
     #tar(jobdb, 'Ti_Te_rel==0.5', 2)
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
     print('I can see ' + str(os.listdir()))
-    #check_sanity(jobdb)
+    check_sanity(jobdb)
     #finished_check(jobdb)
-    archive(jobdb, 10)
+    #archive(jobdb, 30)
     #denetcdfize(jobdb, 'epsilon==0.33')
-    #clean_success(jobdb, 'epsilon==0.33')
+    #clean(jobdb, 'cancelled', 'epsilon>0')
     #trash(jobdb)
     jobdb.close()
 
