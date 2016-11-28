@@ -24,6 +24,7 @@ import grp
 import subprocess
 import glob
 import os
+import traceback
 
 from IPython import embed #pylint: disable=unused-import
 
@@ -250,24 +251,20 @@ def netcdfize_el(db, el):
         batch = QuaLiKizBatch.from_dir(batchdir)
     try: 
         batch.to_netcdf()
-    except:
-        e = sys.exc_info()[0]
-        print(e)
-        print(e.message)
+    except Exception as err:
+        traceback.print_tb(err.__traceback__)
         print('Error netcdfing, skipping forever')
         db.execute('''UPDATE Batch SET State='succes_nonetcdf' WHERE Id=?''', (batchid, ))
         db.commit()
     else:
+        runsuccess = True
+        print('Archiving ' + batchdir)
         for i, run in enumerate(batch.runlist):
-            print('Archiving ' + run.rundir)
             with tarfile.open(run.rundir + '.tar.gz', 'w:gz') as tar:
                 tar.add(run.rundir, arcname=os.path.basename(run.rundir))
             if os.path.isfile(run.rundir + '.tar.gz'):
                 shutil.rmtree(run.rundir)
-                db.execute('''UPDATE Job SET State='archived'
-                           WHERE Batch_id=? AND Job_id=?''',
-                           (batchid, i))
-                db.commit()
+        db.execute('''UPDATE Job SET State='archived' WHERE Batch_id=?''', (batchid, ))
         db.execute('''UPDATE Batch SET State='netcdfized' WHERE Id=?''', (batchid, ))
         db.commit()
 
@@ -300,7 +297,7 @@ def cancel(db, criteria):
 
 def hold(db, criteria):
     query = db.execute('''SELECT Id, Path, Jobnumber FROM batch
-                       WHERE OR State='prepared' AND ''' + criteria) 
+                       WHERE State='prepared' AND ''' + criteria) 
     querylist = query.fetchall()
     for el in querylist:
         print(el)
@@ -353,12 +350,12 @@ if __name__ == '__main__':
     prepare_input(jobdb, numsubmit)
     queue(jobdb, numsubmit)
     #cancel(jobdb, 'state==\'queued\'')
-    #hold(jobdb, 'epsilon==0.33')
+    #hold(jobdb, 'smag==5')
     #tar(jobdb, 'Ti_Te_rel==0.5', 2)
     #finished_check(jobdb)
     #netcdfize(jobdb, 1)
-    #finished_check(jobdb)
-    #archive(jobdb, 30)
+    finished_check(jobdb)
+    archive(jobdb, 30)
     #denetcdfize(jobdb, 'epsilon==0.33')
     #clean(jobdb, 'cancelled', 'epsilon>0')
     #trash(jobdb)
