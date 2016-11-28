@@ -64,4 +64,6 @@ print()
 print('Not fixed ids:')
 with open('sanity_check_nonfixed', 'w') as file_:
     for dict_ in notfixed_els:
+        print(dict_)
         file_.write(dict_['strat'] + ',' + dict_['el'][1] + '\n')
+print('Script done')
