@@ -61,7 +61,7 @@ ncores = 1152
 
 # Load the scan plan from csv. This is based on the 10D database google sheet
 scan_plan = OrderedDict()
-with open('10D database suggestion.csv') as csvfile:
+with open('scan_parameters.csv') as csvfile:
     reader = csv.reader(csvfile)
     [next(reader) for x in range(3)] #pylint: disable=expression-not-assigned
     for row in reader:
