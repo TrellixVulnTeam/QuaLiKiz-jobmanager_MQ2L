@@ -1,3 +1,12 @@
+"""
+Copyright Dutch Institute for Fundamental Energy Research (2016)
+Contributors: Karel van de Plassche (karelvandeplassche@gmail.com)
+License: CeCILL v2.1
+
+This script implements a very basic sanity check for the jobdb.
+Right now it only checks if the job succeeded to be 
+(partially) netcdfized, without correctly updating the jobdb.
+"""
 import sqlite3
 import glob
 import warnings
@@ -38,13 +47,14 @@ for el in querylist:
                             db.commit()
                             changed_els.append(el)
                         elif len(tarred_files) > 0:
+                            # The netdfization succeeded, but the tarring didn't. Fix it with the tar_insane.sh script
                             notfixed_els.append({'el': el, 'strat': 'targz'})
                         else:
                             notfixed_els.append({'el': el, 'strat': 'check netcdf'})
 
                     else:
                         print('Not netcdfized. Give up! Please check manually')
-                        notfixed_els.append(el)
+                        notfixed_els.append({'el': el, 'strat': 'check netcdf'})
                 else:
                     raise
             else:
@@ -55,6 +65,7 @@ for el in querylist:
                     else:
                         batch_success = False
                 if not batch_success:
+                    notfixed_els.append({'el': el, 'strat': 'check batch'})
                     print(str(el) + ' is insane!')
 print()
 print('Changed ids:')

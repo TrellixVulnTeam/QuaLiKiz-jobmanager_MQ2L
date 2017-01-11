@@ -1,3 +1,11 @@
+"""
+Copyright Dutch Institute for Fundamental Energy Research (2016)
+Contributors: Karel van de Plassche (karelvandeplassche@gmail.com)
+License: CeCILL v2.1
+
+Launch this script with the supplied mpi_netcdf.sbatch to netCDFize finished runs
+in parallel.
+"""
 from mpi4py import MPI
 import sqlite3
 from launch_run import netcdfize_el
