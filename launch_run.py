@@ -2,6 +2,11 @@
 Copyright Dutch Institute for Fundamental Energy Research (2016)
 Contributors: Karel van de Plassche (karelvandeplassche@gmail.com)
 License: CeCILL v2.1
+
+This script automatically initializes, runs and archives QuaLiKiz runs.
+Run this script periodically untill all jobs are done. To be sure to
+not clash during operations, a lock file is generated at the start,
+exiting the script if it already exists.
 """
 # Suggestion: Run with python launch_run.py > launch_run.py.log 2>&1 &
 import os

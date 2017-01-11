@@ -2,6 +2,11 @@
 Copyright Dutch Institute for Fundamental Energy Research (2016)
 Contributors: Karel van de Plassche (karelvandeplassche@gmail.com)
 License: CeCILL v2.1
+
+This script generates the skeleton needed to set up a large QuaLiKiz collection of
+runs. A sqlite3 database with job information is generated, and the other scripts
+in this folder use this database to manage, run, initialize and archive the QuaLiKiz
+jobs.
 """
 import os
 import sys
@@ -10,7 +15,7 @@ import sqlite3
 import csv
 from collections import OrderedDict
 from copy import deepcopy
-from itertools import product
+from itertools import product, chain           
 
 from IPython import embed #pylint: disable=unused-import
 import numpy as np
@@ -94,8 +99,8 @@ scan_vip['Ti_Te_rel'] = 1
 scan_vip['Zeff'] = 1
 scan_vip['Nustar'] = 1e-3
 scan_vip['smag'] = 1
-for key, item in scan_plan.items():
-    scan_plan[key] = sorted(item, key=lambda x: (x - scan_vip[key])**2) #pylint: disable=cell-var-from-loop
+for key, vip_value in scan_vip.items():
+    scan_plan[key] = sorted(scan_plan[key], key=lambda x: (x - vip_value)**2) #pylint: disable=cell-var-from-loop
 
 # Debugging: Remove all but one value for scan_plan
 #for key, item in scan_plan.items():
@@ -137,40 +142,45 @@ batch_id = 0
 tot = np.product([len(x) for x in scan_plan.values()])
 for i, scan_values in enumerate(product(*scan_plan.values())):
     print(str(i) + '/' + str(tot))
-    base_plan_parent_copy = deepcopy(base_plan)
-    xpoint_base = base_plan_parent_copy['xpoint_base']
+    #base_plan_parent_copy = deepcopy(base_plan)
+    #xpoint_base = base_plan_parent_copy['xpoint_base']
     batch_name = ''
     value_list = []
 
-    scan_point = OrderedDict(zip(scan_plan.keys(), scan_values))
-    # Reorder elements in point list to avoid dependencies
-    if (any([item in scan_point for item in ['epsilon', 'x', 'rho']]) and
-            'Nustar' in scan_point):
-        scan_point.move_to_end('Nustar')
-    if all([item in scan_point for item in ['Nustar', 'Ti_Te_rel']]):
-        scan_point.move_to_end('Ti_Te_rel')
-
-    # Set xpoint_base to scan_point
-    for name, value in scan_point.items():
-        xpoint_base[name] = value
-        batch_name += str(name) + str(value)
-
-    # Sanity check: did setting work?
-    for name, value in scan_point.items():
-        if not np.isclose(xpoint_base[name], value, rtol=1e-4):
-            raise Exception('Setting of ' + name + ' failed!' +
-                            'Should be ' + str(value) + ' but is ' + str(xpoint_base[name]))
-    # Now we have our 'batchbase'. Each batch has a unique base
-    # of which we will create 10 runs
     joblist = []
+    scan_point = OrderedDict(zip(scan_plan.keys(), scan_values))
+    for name, value in scan_point.items():
+        batch_name += str(name) + str(value)
 
     for name, values in batch_variable.items():
         for i, value in enumerate(values):
-            base_plan_batch_copy = deepcopy(base_plan_parent_copy)
+            base_plan_batch_copy = deepcopy(base_plan)
             xpoint_base = base_plan_batch_copy['xpoint_base']
-            db.execute(insert_job_string, (batch_id, i, 'prepared', None, value))
+            scan_point[name] = value
             job_name = str(name) + str(value)
-            xpoint_base[name] = value
+            print(job_name)
+            # Reorder elements in point list to avoid dependencies
+            if (any([item in scan_point for item in ['epsilon', 'x', 'rho']]) and
+                    'Nustar' in scan_point):
+                scan_point.move_to_end('Nustar')
+            if all([item in scan_point for item in ['Nustar', 'Ti_Te_rel']]):
+                scan_point.move_to_end('Ti_Te_rel')
+
+            # Set xpoint_base to scan_point
+            for scan_name, scan_value in scan_point.items():
+                xpoint_base[scan_name] = scan_value
+
+            # Now we have our 'batchbase'. Each batch has a unique base
+            # of which we will create 10 runs
+            
+            # Sanity check: did setting work?
+            print(job_name)
+            for scan_name, scan_value in scan_point.items():
+                print(scan_name, scan_value)
+                if not np.isclose(xpoint_base[scan_name], scan_value, rtol=1e-4):
+                    raise Exception('Setting of ' + scan_name + ' failed!' +
+                                    'Should be ' + str(scan_value) + ' but is ' + str(xpoint_base[scan_name]))
+            db.execute(insert_job_string, (batch_id, i, 'prepared', None, value))
             # If you want to run a different binary, change here
             job = QuaLiKizRun(os.path.join(rootdir, runsdir, batch_name),
                               job_name, '../../../QuaLiKiz',

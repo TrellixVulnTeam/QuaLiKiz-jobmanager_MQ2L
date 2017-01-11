@@ -1,3 +1,10 @@
+"""
+Copyright Dutch Institute for Fundamental Energy Research (2016)
+Contributors: Karel van de Plassche (karelvandeplassche@gmail.com)
+License: CeCILL v2.1
+
+Generate a nested foldertree in the hsi system to store the netCDF files.
+"""
 import sqlite3
 from collections import OrderedDict
 from IPython import embed
